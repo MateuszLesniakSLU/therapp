@@ -1,0 +1,7 @@
+DB
+postgres
+Haslo123
+
+admin aplikacji
+Admin
+Haslo123
