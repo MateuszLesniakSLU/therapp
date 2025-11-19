@@ -37,4 +37,4 @@ Thumbs.db
 # Misc
 .tmp/
 cache/
-coverage/
+coverage
