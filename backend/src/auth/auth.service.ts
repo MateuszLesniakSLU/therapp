@@ -15,7 +15,7 @@ export class AuthService {
 
     //weryfikacja danych użytkownika, nieprawidłowe == brak dostępu.
     async validateUser(username: string, password: string) {
-        const user = await this.usersService.findByUsername(username);
+        const user = await this.usersService.findUserByUsername(username);
 
         const isMatch = user && await bcrypt.compare(password, user.password);
 

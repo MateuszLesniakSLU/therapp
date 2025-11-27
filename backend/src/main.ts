@@ -6,7 +6,7 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     const usersService = app.get(UsersService);
 
-    const users = await usersService.findAll();
+    const users = await usersService.findAllUsers();
     console.log('Users in DB:', users);
 
     await app.listen(3000);
