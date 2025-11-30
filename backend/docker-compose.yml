@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    container_name: thera_app_container
+    restart: always
+    environment:
+      POSTGRES_USER: postgres           # Twój użytkownik
+      POSTGRES_PASSWORD: Haslo123    # Twoje hasło
+      POSTGRES_DB: thera_app    # Nazwa domyślnej bazy
+    ports:
+    - "5432:5432"  # Mapowanie portów (Host:Kontener)
+    volumes:
+    - ./postgres_data:/var/lib/postgresql/data  # Trwałość danych
