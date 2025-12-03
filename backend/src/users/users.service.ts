@@ -1,68 +1,85 @@
-import {Inject, Injectable} from "@nestjs/common";
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
 export class UsersService {
-    constructor(@Inject('PG_POOL') private readonly pool: Pool) {}
+  constructor(@Inject('PG_POOL') private readonly pool: Pool) {}
 
-    // GET /users - pobierz wszystkich użytkowników
-    async findAllUsers() {
-        const result = await this.pool.query(
-            `SELECT id, username, email, created_at, deleted 
-             FROM users 
-             WHERE deleted = FALSE OR deleted IS NULL`
-        );
-        return result.rows;
-    }
+  async findAllUsers() {
+    const result = await this.pool.query(
+      `SELECT id, username, email, role, first_name, last_name, created_at
+       FROM users
+       WHERE COALESCE(deleted, FALSE) = FALSE`
+    );
+    return result.rows;
+  }
 
-    // GET /users/:id - pobierz konkretnego usera o :id
-    async findUserById(id: number) {
-        const result = await this.pool.query('SELECT * FROM users WHERE id = $1', [id]);
-        return result.rows[0];
-    }
+  async findUserById(id: number) {
+    const idNum = Number(id);
+    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
+    const result = await this.pool.query(
+      `SELECT id, username, email, role, first_name, last_name, created_at
+       FROM users
+       WHERE id = $1`,
+      [idNum]
+    );
+    return result.rows[0] || null;
+  }
 
-    // SEARCH - wyszukiwanie po username (do logowania)
-    async findUserByUsername(username: string) {
-        const result = await this.pool.query(
-            `SELECT * FROM users WHERE username = $1`,
-            [username]
-        );
-        return result.rows[0];
-    }
+  async findByUsername(username: string) {
+    const result = await this.pool.query(
+      `SELECT * FROM users WHERE username = $1`,
+      [username]
+    );
+    return result.rows[0] || null;
+  }
 
-    //POST /auth/register - utwórz użytkownika
-    async createUser(username: string, password: string, email?: string) {
-        const result = await this.pool.query(
-            'INSERT INTO users (username, password, email, created_at) VALUES ($1, $2, $3, NOW(), FALSE) RETURNING id, username, email, created_at',
-            [username, password, email],
-        );
-        return result.rows[0];
-    }
+  async createUser(
+    username: string,
+    password: string,
+    email?: string,
+    role = 'patient',
+    first_name?: string,
+    last_name?: string,
+  ) {
+    const res = await this.pool.query(
+      `INSERT INTO users (username, password, email, role, first_name, last_name, created_at, deleted)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), FALSE)
+       RETURNING id, username, email, role, first_name, last_name, created_at`,
+      [username, password, email ?? null, role, first_name ?? null, last_name ?? null]
+    );
+    return res.rows[0];
+  }
 
-    // PATCH /users/:id - zaktualizuj dane
-    async updateUser(id: number, data: { username?: string, email?: string }) {
-        const { username, email } = data;
+  async updateUser(id: number, data: { username?: string; email?: string; first_name?: string; last_name?: string }) {
+    const { username, email, first_name, last_name } = data;
+    const res = await this.pool.query(
+      `UPDATE users
+       SET username = COALESCE($1, username),
+           email = COALESCE($2, email),
+           first_name = COALESCE($3, first_name),
+           last_name = COALESCE($4, last_name)
+       WHERE id = $5
+       RETURNING id, username, email, role, first_name, last_name, created_at`,
+      [username ?? null, email ?? null, first_name ?? null, last_name ?? null, id]
+    );
+    return res.rows[0] || null;
+  }
 
-        const result = await this.pool.query(
-            `UPDATE users
-            SET
-            username = COALESCE($1, username),
-            email = COALESCE($2, email),
-            WHERE id = $3,
-            RETURNING id, username, email, created_at`,
-            [username ?? null, email ?? null, id]
-        );
+  async softDeleteUser(id: number) {
+    await this.pool.query(
+      `UPDATE users SET deleted = TRUE WHERE id = $1`,
+      [id]
+    );
+    return { message: 'User marked as deleted' };
+  }
 
-        return result.rows[0];
-    }
-
-    // DELETE /users/:id - soft delete
-    async softDeleteUser(id: number) {
-        await this.pool.query(
-            `UPDATE users SET deleted = TRUE WHERE id = $1`,
-            [id]
-        );
-
-        return { message: 'Użytkownik oznaczony jako usunięty' };
-    }
+  async restoreUser(id: number) {
+    const result = await this.pool.query(
+      `UPDATE users SET deleted = FALSE WHERE id = $1 RETURNING id, username, email, role, first_name, last_name, created_at`,
+      [id]
+    );
+    if (result.rows.length === 0) return { message: 'User not found' };
+    return { message: 'User restored', user: result.rows[0] };
+  }
 }

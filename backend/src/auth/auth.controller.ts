@@ -1,38 +1,29 @@
-import {Body, Controller, Post, Request, UseGuards} from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import {UsersService} from "../users/users.service";
-import * as bcrypt from 'bcrypt';
+import { UsersService } from '../users/users.service';
+import { RegisterDto } from './dto/register.dto';
 import { LocalAuthGuard } from './local-auth.guard';
+import { Public } from './public.decorator';
+import * as bcrypt from 'bcrypt';
 
-//Controller odpowiada na zapytania HTTP, 'auth' to prefix dla tego kontrolera np /auth/login itd.
 @Controller('auth')
 export class AuthController {
-    //constructor - wstrzykiwanie authService żeby endpointy mogły korzystać z danych autentykacji
-    constructor(
-        private authService: AuthService,
-        private readonly usersService: UsersService,
-        ) {}
+  constructor(private readonly authService: AuthService, private readonly usersService: UsersService) {}
 
+  @Public()
+  @Post('register')
+  async register(@Body() body: RegisterDto) {
+    const hashed = await bcrypt.hash(body.password, 10);
+    const user = await this.usersService.createUser(body.username, hashed, body.email);
+    const { password, ...result } = user;
+    return { message: 'User created', user: result };
+  }
 
-    //POST /auth/login poprawne logowanie == zwrócenie tokenu JWT
-    @UseGuards(LocalAuthGuard)
-    @Post('login')
-    async login(@Request() req : any) {
-        //Passport wstawi user w req.user
-        return this.authService.login(req.user);
-    }
-
-    //POST /auth/register rejestracja użytkownika
-    @Post('register')
-    //Body - dane z requestu JSON mają być przekazane do zmiennej body
-    async register(@Body() body: {username: string, password: string, email?: string}) {
-        const hashedPassword = await bcrypt.hash(body.password, 10);
-        const user = await this.usersService.createUser(
-            body.username,
-            hashedPassword,
-            body.email,
-        );
-        const { password, ...result } = user;
-        return { message: 'User created', user: result };
-    }
+  // LocalAuthGuard wykonuje validate z LocalStrategy i ustawia req.user
+  @Public()
+  @UseGuards(LocalAuthGuard)
+  @Post('login')
+  async login(@Request() req: any) {
+    return this.authService.login(req.user);
+  }
 }
