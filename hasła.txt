@@ -3,5 +3,15 @@ postgres
 Haslo123
 
 admin aplikacji
-Admin
-Haslo123
+admin
+admin123
+
+testowy user
+testuser
+test123
+
+{
+  "username": "nowyuser",
+  "password": "bardzodlugiehaslo",
+  "email": "nowy@example.com"
+}
