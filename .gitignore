@@ -38,3 +38,5 @@ Thumbs.db
 .tmp/
 cache/
 coverage/
+
+postgres_data/

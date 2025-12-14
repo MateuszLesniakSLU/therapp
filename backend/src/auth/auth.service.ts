@@ -1,37 +1,27 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { UsersService } from '../users/users.service';
 
-//Injectable - można wstrzyknąć do innych modułów/serwisów
-//Service - odpowiada za logikę biznesową np. weryfikowanie loginu, generowanie tokenów, łączenie się z bazą.
 @Injectable()
 export class AuthService {
-    //constructor - wstrzykiwanie np. usersService żeby AuthService mógł korzystać z db i jwtService żeby mógł generować tokeny
-    constructor(
-        private usersService: UsersService,
-        private jwtService: JwtService,
-    ) {}
+  constructor(private readonly usersService: UsersService, private readonly jwtService: JwtService) {}
 
-    //weryfikacja danych użytkownika, nieprawidłowe == brak dostępu.
-    async validateUser(username: string, password: string) {
-        const user = await this.usersService.findUserByUsername(username);
+  // validateUser używane w LocalStrategy
+  async validateUser(username: string, password: string) {
+    const user = await this.usersService.findByUsername(username);
+    if (!user) return null;
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return null;
+    // zwracamy bez hasła (auth flow używa user w req.user)
+    const { password: _p, ...rest } = user;
+    return rest;
+  }
 
-        const isMatch = user && await bcrypt.compare(password, user.password);
-
-        if(isMatch) {
-            const { password, ...result } = user;
-            return result;
-        }
-        throw new UnauthorizedException('Nieprawidłowe dane logowania');
-    }
-
-    //logowanie do systemu, pomyślnie == zwraca token dostępu przez jwtService
-    async login(user:any) {
-        //payload - dane wysyłane do jwtService
-        const payload = { username: user.username, sub: user.id };
-        return {
-            accessToken: await this.jwtService.sign(payload),
-        }
-    }
+  // generowanie tokena
+  async login(user: any) {
+    // user powinien zawierać id i role (np. z db)
+    const payload = { username: user.username, sub: user.id ?? user.userId, role: user.role };
+    return { access_token: this.jwtService.sign(payload) };
+  }
 }
