@@ -1,4 +1,3 @@
-// src/surveys/surveys.service.ts
 import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
 import { CreateSurveyDto } from './dto/create-survey.dto';
@@ -9,7 +8,31 @@ import { SubmitResponseDto, AnswerDto } from './dto/submit-response.dto';
 export class SurveysService {
   constructor(@Inject('PG_POOL') private pool: Pool) {}
 
+  private async insertQuestionWithOptions(client: any, surveyId: number, qDto: any, ord: number) {
+    const questionType = qDto.question_type ?? 'text';
+    const res = await client.query(
+      `INSERT INTO survey_questions (survey_id, question_text, question_type, required, ord)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [surveyId, qDto.question_text ?? '', questionType, qDto.required ?? true, ord]
+    );
+    const qId = res.rows[0].id;
+    if (questionType === 'choice' && qDto.options && Array.isArray(qDto.options)) {
+      for (let j = 0; j < qDto.options.length; j++) {
+        await client.query(
+          `INSERT INTO survey_question_options (question_id, option_text, ord) VALUES ($1, $2, $3)`,
+          [qId, qDto.options[j].option_text ?? '', j]
+        );
+      }
+    }
+    return qId;
+  }
+
   async createSurvey(createdBy: number, dto: CreateSurveyDto): Promise<{ id: number }> {
+    if (!dto) throw new BadRequestException('Request body is required');
+    if (!dto.title || typeof dto.title !== 'string' || dto.title.trim() === '') {
+      throw new BadRequestException('title is required');
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -22,29 +45,7 @@ export class SurveysService {
 
       if (dto.questions && Array.isArray(dto.questions)) {
         for (let i = 0; i < dto.questions.length; i++) {
-          const questionDto = dto.questions[i];
-          const questionType = questionDto.question_type;
-          if (!['text', 'number', 'choice', 'rating'].includes(questionType)) {
-            throw new BadRequestException(`Invalid question type: ${questionType}`);
-          }
-
-          const insertQuestionResult = await client.query(
-            `INSERT INTO survey_questions (survey_id, question_text, question_type, required, ord)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [surveyId, questionDto.question_text, questionType, questionDto.required ?? true, i]
-          );
-          const questionId: number = insertQuestionResult.rows[0].id;
-
-          if (questionType === 'choice' && questionDto.options && Array.isArray(questionDto.options)) {
-            for (let j = 0; j < questionDto.options.length; j++) {
-              const optionDto = questionDto.options[j];
-              await client.query(
-                `INSERT INTO survey_question_options (question_id, option_text, ord)
-                 VALUES ($1, $2, $3)`,
-                [questionId, optionDto.option_text, j]
-              );
-            }
-          }
+          await this.insertQuestionWithOptions(client, surveyId, dto.questions[i], i);
         }
       }
 
@@ -60,7 +61,7 @@ export class SurveysService {
 
   async listSurveys(): Promise<any[]> {
     const result = await this.pool.query(
-      `SELECT id, title, description, created_by, created_at, active
+      `SELECT id, title, description, created_by, created_at, active, locked
        FROM surveys
        WHERE active = TRUE
        ORDER BY created_at DESC`
@@ -70,7 +71,7 @@ export class SurveysService {
 
   async getSurvey(surveyId: number): Promise<any> {
     const surveyResult = await this.pool.query(
-      `SELECT id, title, description, created_by, created_at, active
+      `SELECT id, title, description, created_by, created_at, active, locked
        FROM surveys
        WHERE id = $1`,
       [surveyId]
@@ -90,8 +91,8 @@ export class SurveysService {
     const questions = questionsResult.rows;
 
     const choiceQuestionIds = questions
-      .filter(question => question.question_type === 'choice')
-      .map(question => question.id);
+      .filter((question) => question.question_type === 'choice')
+      .map((question) => question.id);
 
     let questionOptionsMap: Record<number, any[]> = {};
     if (choiceQuestionIds.length > 0) {
@@ -109,27 +110,37 @@ export class SurveysService {
         questionOptionsMap[optionRow.question_id].push({
           id: optionRow.id,
           option_text: optionRow.option_text,
-          ord: optionRow.ord
+          ord: optionRow.ord,
         });
       }
     }
 
-    const assembledQuestions = questions.map(question => ({
+    const assembledQuestions = questions.map((question) => ({
       id: question.id,
       question_text: question.question_text,
       question_type: question.question_type,
       required: question.required,
       ord: question.ord,
-      options: questionOptionsMap[question.id] ?? []
+      options: questionOptionsMap[question.id] ?? [],
     }));
 
     return {
       ...survey,
-      questions: assembledQuestions
+      questions: assembledQuestions,
     };
   }
 
   async updateSurvey(surveyId: number, dto: UpdateSurveyDto): Promise<any> {
+    if (!dto) throw new BadRequestException('Request body is required');
+
+    const lockedCheck = await this.pool.query(`SELECT locked FROM surveys WHERE id = $1`, [surveyId]);
+    if (lockedCheck.rows.length === 0) {
+      throw new NotFoundException('Survey not found');
+    }
+    if (lockedCheck.rows[0].locked) {
+      throw new BadRequestException('Survey is locked and cannot be edited');
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -150,34 +161,14 @@ export class SurveysService {
       }
 
       if (dto.questions && Array.isArray(dto.questions)) {
-        await client.query(`DELETE FROM survey_question_options WHERE question_id IN (SELECT id FROM survey_questions WHERE survey_id = $1)`, [surveyId]);
+        await client.query(
+          `DELETE FROM survey_question_options WHERE question_id IN (SELECT id FROM survey_questions WHERE survey_id = $1)`,
+          [surveyId]
+        );
         await client.query(`DELETE FROM survey_questions WHERE survey_id = $1`, [surveyId]);
 
         for (let i = 0; i < dto.questions.length; i++) {
-          const questionDto = dto.questions[i];
-          const questionType = questionDto.question_type ?? 'text';
-          if (!['text', 'number', 'choice', 'rating'].includes(questionType)) {
-            await client.query('ROLLBACK');
-            throw new BadRequestException(`Invalid question type: ${questionType}`);
-          }
-
-          const insertQuestionResult = await client.query(
-            `INSERT INTO survey_questions (survey_id, question_text, question_type, required, ord)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [surveyId, questionDto.question_text ?? '', questionType, questionDto.required ?? true, i]
-          );
-          const questionId: number = insertQuestionResult.rows[0].id;
-
-          if (questionType === 'choice' && questionDto.options && Array.isArray(questionDto.options)) {
-            for (let j = 0; j < questionDto.options.length; j++) {
-              const optionDto = questionDto.options[j];
-              await client.query(
-                `INSERT INTO survey_question_options (question_id, option_text, ord)
-                 VALUES ($1, $2, $3)`,
-                [questionId, optionDto.option_text ?? '', j]
-              );
-            }
-          }
+          await this.insertQuestionWithOptions(client, surveyId, dto.questions[i], i);
         }
       }
 
@@ -229,7 +220,7 @@ export class SurveysService {
         );
         assignedRows.push({
           user_id: insertResult.rows[0].user_id,
-          expires_at: insertResult.rows[0].expires_at
+          expires_at: insertResult.rows[0].expires_at,
         });
       }
 
@@ -244,6 +235,7 @@ export class SurveysService {
   }
 
   async submitResponse(userId: number, surveyId: number, dto: SubmitResponseDto): Promise<{ id: number }> {
+    if (!dto) throw new BadRequestException('Request body is required');
     if (!Array.isArray(dto.answers) || dto.answers.length === 0) {
       throw new BadRequestException('Answers are required');
     }
@@ -263,19 +255,56 @@ export class SurveysService {
       }
 
       const insertResponseResult = await client.query(
-        `INSERT INTO survey_responses (survey_id, user_id, submitted_at)
-         VALUES ($1, $2, NOW()) RETURNING id`,
-        [surveyId, userId]
+        `INSERT INTO survey_responses (survey_id, user_id, submitted_at, took_medication, wellbeing_rating)
+         VALUES ($1, $2, NOW(), $3, $4) RETURNING id`,
+        [surveyId, userId, dto.took_medication ?? null, dto.wellbeing_rating ?? null]
       );
       const responseId: number = insertResponseResult.rows[0].id;
 
       const questionsResult = await client.query(
-        `SELECT id, question_type, required FROM survey_questions WHERE survey_id = $1`,
+        `SELECT id, question_type, required, ord FROM survey_questions WHERE survey_id = $1 ORDER BY ord`,
         [surveyId]
       );
-      const surveyQuestionsMap = new Map<number, { question_type: string; required: boolean }>();
+
+      const surveyQuestionsMap = new Map<number, { question_type: string; required: boolean; ord: number }>();
       for (const questionRow of questionsResult.rows) {
-        surveyQuestionsMap.set(questionRow.id, { question_type: questionRow.question_type, required: questionRow.required });
+        surveyQuestionsMap.set(questionRow.id, {
+          question_type: questionRow.question_type,
+          required: questionRow.required,
+          ord: questionRow.ord,
+        });
+      }
+
+      const ordToQuestionId = new Map<number, number>();
+      for (const [qid, info] of surveyQuestionsMap.entries()) {
+        ordToQuestionId.set(info.ord, qid);
+      }
+
+      const q3Id = ordToQuestionId.get(2);
+      const q3_yesId = ordToQuestionId.get(3);
+      const q3_noId = ordToQuestionId.get(4);
+
+      let tookMedicationAnswerText: string | null = null;
+      if (q3Id) {
+        const ans = (dto.answers as AnswerDto[]).find((a) => a.question_id === q3Id);
+        tookMedicationAnswerText = ans ? (ans.answer_text ?? (ans.answer_value !== undefined ? String(ans.answer_value) : null)) : null;
+        if (typeof tookMedicationAnswerText === 'string') tookMedicationAnswerText = tookMedicationAnswerText.trim();
+      }
+
+      if (tookMedicationAnswerText && tookMedicationAnswerText.toLowerCase() === 'tak' && q3_yesId) {
+        const hasSideEffects = (dto.answers as AnswerDto[]).some((a) => a.question_id === q3_yesId && a.answer_text && a.answer_text.trim() !== '');
+        if (!hasSideEffects) {
+          await client.query('ROLLBACK');
+          throw new BadRequestException('Jeżeli przyjąłeś leki — podaj, czy wystąpiły efekty uboczne');
+        }
+      }
+
+      if (tookMedicationAnswerText && tookMedicationAnswerText.toLowerCase() === 'nie' && q3_noId) {
+        const hasReason = (dto.answers as AnswerDto[]).some((a) => a.question_id === q3_noId && a.answer_text && a.answer_text.trim() !== '');
+        if (!hasReason) {
+          await client.query('ROLLBACK');
+          throw new BadRequestException('Jeżeli nie przyjąłeś leków — podaj przyczynę');
+        }
       }
 
       for (const answer of dto.answers as AnswerDto[]) {
@@ -294,10 +323,11 @@ export class SurveysService {
             await client.query('ROLLBACK');
             throw new BadRequestException(`Answer for question ${answer.question_id} out of range (0..10)`);
           }
-          await client.query(
-            `INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES ($1, $2, $3)`,
-            [responseId, answer.question_id, answer.answer_value]
-          );
+          await client.query(`INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES ($1, $2, $3)`, [
+            responseId,
+            answer.question_id,
+            answer.answer_value,
+          ]);
         } else if (questionInfo.question_type === 'number') {
           let numericValue: number | null = null;
           if (typeof answer.answer_value === 'number') {
@@ -323,10 +353,11 @@ export class SurveysService {
             await client.query('ROLLBACK');
             throw new BadRequestException(`Answer for question ${answer.question_id} is required`);
           }
-          await client.query(
-            `INSERT INTO survey_answers (response_id, question_id, answer_text) VALUES ($1, $2, $3)`,
-            [responseId, answer.question_id, answerText]
-          );
+          await client.query(`INSERT INTO survey_answers (response_id, question_id, answer_text) VALUES ($1, $2, $3)`, [
+            responseId,
+            answer.question_id,
+            answerText,
+          ]);
         }
       }
 
@@ -350,7 +381,7 @@ export class SurveysService {
       [surveyId]
     );
 
-    const responseIds = responsesResult.rows.map(row => row.response_id);
+    const responseIds = responsesResult.rows.map((row) => row.response_id);
     let answersMap: Record<number, any[]> = {};
 
     if (responseIds.length > 0) {
@@ -370,17 +401,17 @@ export class SurveysService {
           id: answerRow.id,
           question_id: answerRow.question_id,
           answer_text: answerRow.answer_text,
-          answer_value: answerRow.answer_value
+          answer_value: answerRow.answer_value,
         });
       }
     }
 
-    return responsesResult.rows.map(row => ({
+    return responsesResult.rows.map((row) => ({
       response_id: row.response_id,
       user_id: row.user_id,
       username: row.username,
       submitted_at: row.submitted_at,
-      answers: answersMap[row.response_id] ?? []
+      answers: answersMap[row.response_id] ?? [],
     }));
   }
 
@@ -421,7 +452,7 @@ export class SurveysService {
           question_type: question.question_type,
           avg: averageResult.rows[0].avg_value !== null ? Number(averageResult.rows[0].avg_value) : null,
           count: Number(averageResult.rows[0].total_count),
-          distribution: distributionResult.rows.map(row => ({ value: row.answer_value, count: Number(row.count) }))
+          distribution: distributionResult.rows.map((row) => ({ value: row.answer_value, count: Number(row.count) })),
         });
       } else if (question.question_type === 'choice') {
         const choiceStatsResult = await this.pool.query(
@@ -437,7 +468,7 @@ export class SurveysService {
           question_id: questionId,
           question_text: question.question_text,
           question_type: question.question_type,
-          choices: choiceStatsResult.rows.map(row => ({ option: row.answer_text, count: Number(row.count) }))
+          choices: choiceStatsResult.rows.map((row) => ({ option: row.answer_text, count: Number(row.count) })),
         });
       } else {
         const textCountResult = await this.pool.query(
@@ -451,7 +482,7 @@ export class SurveysService {
           question_id: questionId,
           question_text: question.question_text,
           question_type: question.question_type,
-          count: Number(textCountResult.rows[0].count)
+          count: Number(textCountResult.rows[0].count),
         });
       }
     }

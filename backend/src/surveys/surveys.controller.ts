@@ -25,9 +25,9 @@ export class SurveysController {
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('admin', 'therapist')
     @Post()
-    async createSurvey(@Request() req: any, @Body() CreateSurveyDto: CreateSurveyDto) {
-        const userId = req.user.userId;
-        return this.surveysService.createSurvey(userId, CreateSurveyDto);
+    async createSurvey(@Request() req: any, @Body() createSurveyDto: CreateSurveyDto) {
+        const userId = req.user.sub || req.user.userId;
+        return this.surveysService.createSurvey(userId, createSurveyDto);
     }
 
     @Get()
@@ -67,7 +67,7 @@ export class SurveysController {
         @Param('id', ParseIntPipe) id: number,
         @Body() submitResponseDto: SubmitResponseDto,
     ) {
-        const userId = req.user.userId;
+        const userId = req.user.sub || req.user.userId;
         return this.surveysService.submitResponse(userId, id, submitResponseDto);
     }
 

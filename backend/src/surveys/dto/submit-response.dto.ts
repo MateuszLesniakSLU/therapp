@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, IsInt, IsOptional, Min, Max, IsString } from 'class-validator';
+import { IsArray, ValidateNested, IsInt, IsOptional, Min, Max, IsString, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AnswerDto {
@@ -22,4 +22,16 @@ export class SubmitResponseDto {
   @ValidateNested({ each: true })
   @Type(() => AnswerDto)
   answers!: AnswerDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  took_medication?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  @Type(() => Number)
+  wellbeing_rating?: number;
 }
