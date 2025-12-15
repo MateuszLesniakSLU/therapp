@@ -1,105 +1,125 @@
-// src/surveys/survey-scheduler.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as cron from 'node-cron';
-import { Pool } from 'pg';
-import { Inject } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SurveySchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SurveySchedulerService.name);
 
-  constructor(@Inject('PG_POOL') private pool: Pool) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit() {
+    //Utwórz ankietę o 00:00
     cron.schedule(
       '0 0 * * *',
       () => {
-        this.logger.log('Starting daily survey creation job');
-        this.runDailyCreation().catch((err) => {
-          this.logger.error('Daily survey creation failed', err);
+        this.logger.log('Running daily survey job');
+        this.runDailySurveyCycle().catch((err) => {
+          this.logger.error('Daily survey job failed', err);
         });
       },
-      { timezone: 'Europe/Warsaw' }
+      { timezone: 'Europe/Warsaw' },
     );
 
-    this.logger.log('SurveySchedulerService scheduled (0 0 * * *)');
+    this.logger.log('SurveySchedulerService scheduled (daily at 00:00)');
   }
 
-  async runDailyCreation() {
-    const client = await this.pool.connect();
-    try {
-      const templatesRes = await client.query(
-        `SELECT id, title, description, created_by FROM survey_templates`
-      );
+  async runDailySurveyCycle() {
+    const now = new Date();
+    const surveyDate = new Date(
+      now.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' }),
+    );
 
-      for (const tpl of templatesRes.rows) {
-        await client.query('BEGIN');
+    const todayLabel = surveyDate.toISOString().split('T')[0];
+    const title = `Daily survey ${todayLabel}`;
 
-        const exists = await client.query(
-          `SELECT 1 FROM surveys WHERE title = $1 AND created_at::date = CURRENT_DATE`,
-          [tpl.title]
+    await this.prisma.$transaction(async (tx) => {
+      // Zamyka stare ankiety
+      await tx.survey.updateMany({
+        where: { active: true },
+        data: { active: false },
+      });
+
+      // Sprawdza czy ankieta istnieje, jeżeli tak to przerywa
+      const exists = await tx.survey.findUnique({
+        where: { date: surveyDate },
+      });
+
+      if (exists) {
+        this.logger.warn(
+          `Survey for ${todayLabel} already exists — skipping`,
         );
-        if (exists.rows.length > 0) {
-          this.logger.log(`Survey for template ${tpl.id} already created today — skipping`);
-          await client.query('ROLLBACK');
-          continue;
-        }
-
-        const surveyRes = await client.query(
-          `INSERT INTO surveys (title, description, created_by, active, locked, created_at)
-           VALUES ($1, $2, $3, TRUE, TRUE, NOW()) RETURNING id`,
-          [tpl.title, tpl.description ?? null, tpl.created_by ?? null]
-        );
-        const surveyId = surveyRes.rows[0].id;
-
-        const qRes = await client.query(
-          `SELECT id, question_text, question_type, required, ord
-           FROM survey_template_questions WHERE template_id = $1 ORDER BY ord`,
-          [tpl.id]
-        );
-
-        for (const question of qRes.rows) {
-          const insertQuestionResult = await client.query(
-            `INSERT INTO survey_questions 
-               (survey_id, question_text, question_type, required, ord)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id`,
-            [surveyId, question.question_text, question.question_type, question.required ?? true, question.ord]
-          );
-          const newQuestionId = insertQuestionResult.rows[0].id;
-
-          if (question.question_type === 'choice') {
-            const options = await client.query(
-              `SELECT option_text, ord FROM survey_template_question_options WHERE template_question_id = $1 ORDER BY ord`,
-              [question.id]
-            );
-            for (const opt of options.rows) {
-              await client.query(
-                `INSERT INTO survey_question_options (question_id, option_text, ord) VALUES ($1, $2, $3)`,
-                [newQuestionId, opt.option_text, opt.ord]
-              );
-            }
-          }
-        }
-
-        const usersRes = await client.query(`SELECT id FROM users WHERE role = 'patient'`);
-        for (const u of usersRes.rows) {
-          await client.query(
-            `INSERT INTO survey_assignments (survey_id, user_id, expires_at, assigned_at)
-             VALUES ($1, $2, NULL, NOW())
-             ON CONFLICT (survey_id, user_id) DO NOTHING`,
-            [surveyId, u.id]
-          );
-        }
-
-        await client.query('COMMIT');
-        this.logger.log(`Created survey ${surveyId} from template ${tpl.id}`);
+        return;
       }
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+
+      // 3️⃣ POBIERZ AKTYWNYCH PACJENTÓW
+      const patients = await tx.user.findMany({
+        where: {
+          role: 'patient',
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      if (patients.length === 0) {
+        this.logger.warn('No active patients — daily survey not created');
+        return;
+      }
+
+      // 4️⃣ UTWÓRZ NOWĄ ANKIETĘ (AKTYWNĄ)
+      const survey = await tx.survey.create({
+        data: {
+          title,
+          description: 'Daily wellbeing survey',
+          date: surveyDate,        // 🔥 WYMAGANE POLE
+          active: true,
+          createdById: 1,          // SYSTEM / ADMIN
+        },
+      });
+
+      // 5️⃣ STAŁY ZESTAW PYTAŃ
+      const questions = [
+        { text: 'Jak się dzisiaj czujesz?', type: 'rating' },
+        { text: 'Jak minął dzień?', type: 'text' },
+        { text: 'Czy wziąłeś dzisiaj leki?', type: 'choice' },
+        { text: 'Jeżeli tak – czy wystąpiły efekty uboczne?', type: 'text' },
+        { text: 'Jeżeli nie – dlaczego nie przyjąłeś leków?', type: 'text' },
+        { text: 'Inne przemyślenia', type: 'text' },
+      ];
+
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+
+        const question = await tx.surveyQuestion.create({
+          data: {
+            surveyId: survey.id,
+            questionText: q.text,
+            questionType: q.type,
+            required: true,
+            order: i,
+          },
+        });
+
+        if (q.type === 'choice') {
+          await tx.surveyQuestionOption.createMany({
+            data: [
+              { questionId: question.id, text: 'Tak', order: 0 },
+              { questionId: question.id, text: 'Nie', order: 1 },
+            ],
+          });
+        }
+      }
+
+      // 6️⃣ AUTO-PRZYPISANIE DO WSZYSTKICH PACJENTÓW
+      await tx.surveyAssignment.createMany({
+        data: patients.map((p) => ({
+          surveyId: survey.id,
+          userId: p.id,
+        })),
+        skipDuplicates: true,
+      });
+
+      this.logger.log(`Daily survey ${survey.id} for ${todayLabel} created`);
+    });
   }
 }

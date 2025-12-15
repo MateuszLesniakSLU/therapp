@@ -1,503 +1,306 @@
-import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
-import { Pool } from 'pg';
+import { 
+  Injectable,
+  BadRequestException, 
+  NotFoundException,
+  ForbiddenException
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateSurveyDto } from './dto/create-survey.dto';
 import { UpdateSurveyDto } from './dto/update-survey.dto';
 import { SubmitResponseDto, AnswerDto } from './dto/submit-response.dto';
 
 @Injectable()
 export class SurveysService {
-  constructor(@Inject('PG_POOL') private pool: Pool) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private async insertQuestionWithOptions(client: any, surveyId: number, qDto: any, ord: number) {
-    const questionType = qDto.question_type ?? 'text';
-    const res = await client.query(
-      `INSERT INTO survey_questions (survey_id, question_text, question_type, required, ord)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [surveyId, qDto.question_text ?? '', questionType, qDto.required ?? true, ord]
-    );
-    const qId = res.rows[0].id;
-    if (questionType === 'choice' && qDto.options && Array.isArray(qDto.options)) {
-      for (let j = 0; j < qDto.options.length; j++) {
-        await client.query(
-          `INSERT INTO survey_question_options (question_id, option_text, ord) VALUES ($1, $2, $3)`,
-          [qId, qDto.options[j].option_text ?? '', j]
-        );
-      }
-    }
-    return qId;
-  }
-
-  async createSurvey(createdBy: number, dto: CreateSurveyDto): Promise<{ id: number }> {
-    if (!dto) throw new BadRequestException('Request body is required');
-    if (!dto.title || typeof dto.title !== 'string' || dto.title.trim() === '') {
-      throw new BadRequestException('title is required');
-    }
-
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const insertSurveyResult = await client.query(
-        `INSERT INTO surveys (title, description, created_by) VALUES ($1, $2, $3) RETURNING id`,
-        [dto.title, dto.description ?? null, createdBy]
+  async createSurvey(createdById: number, dto: CreateSurveyDto)
+  {
+    return this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const surveyDate = new Date(
+        now.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' }),
       );
-      const surveyId: number = insertSurveyResult.rows[0].id;
+      const survey = await tx.survey.create({
+        data: {
+          title: dto.title,
+          description: dto.description ?? null,
+          date: surveyDate,
+          createdById,
+          active: true,
+        },
+      });
 
-      if (dto.questions && Array.isArray(dto.questions)) {
-        for (let i = 0; i < dto.questions.length; i++) {
-          await this.insertQuestionWithOptions(client, surveyId, dto.questions[i], i);
+      if (!dto.questions || dto.questions.length === 0) {
+        throw new BadRequestException('Survey must contain at least one question');
+      }
+
+      for (let i = 0; i < dto.questions.length; i++) {
+        
+        const questionDto = dto.questions[i];
+
+        const question = await tx.surveyQuestion.create({
+          data: {
+            surveyId: survey.id,
+            questionText: questionDto.question_text,
+            questionType: questionDto.question_type,
+            required: questionDto.required,
+            order: i,
+          },
+        });
+
+        if (questionDto.question_type === 'choice' && questionDto.options?.length) {
+          for (let j = 0; j < questionDto.options.length; j++) {
+            await tx.surveyQuestionOption.create({
+              data: {
+                questionId: question.id,
+                text: questionDto.options[j].option_text,
+                order: j,
+              },
+            });
+          }
         }
       }
-
-      await client.query('COMMIT');
-      return { id: surveyId };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+      return survey;
+    });
   }
 
   async listSurveys(): Promise<any[]> {
-    const result = await this.pool.query(
-      `SELECT id, title, description, created_by, created_at, active, locked
-       FROM surveys
-       WHERE active = TRUE
-       ORDER BY created_at DESC`
-    );
-    return result.rows;
+    return this.prisma.survey.findMany({
+      where: {
+        active: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
-  async getSurvey(surveyId: number): Promise<any> {
-    const surveyResult = await this.pool.query(
-      `SELECT id, title, description, created_by, created_at, active, locked
-       FROM surveys
-       WHERE id = $1`,
-      [surveyId]
-    );
-    if (surveyResult.rows.length === 0) {
+  async getSurvey(id: number) {
+    const survey = await this.prisma.survey.findUnique({
+      where: { id },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+          include: { options: true },
+        },
+      },
+    });
+
+    if (!survey) {
       throw new NotFoundException('Survey not found');
     }
-    const survey = surveyResult.rows[0];
 
-    const questionsResult = await this.pool.query(
-      `SELECT id, question_text, question_type, required, ord
-       FROM survey_questions
-       WHERE survey_id = $1
-       ORDER BY ord`,
-      [surveyId]
-    );
-    const questions = questionsResult.rows;
+    return survey;
+  }
 
-    const choiceQuestionIds = questions
-      .filter((question) => question.question_type === 'choice')
-      .map((question) => question.id);
+  async saveTodayResponse(userId: number, dto: SubmitResponseDto) {
+  const survey = await this.prisma.survey.findFirst({
+    where: { active: true },
+  });
 
-    let questionOptionsMap: Record<number, any[]> = {};
-    if (choiceQuestionIds.length > 0) {
-      const optionsResult = await this.pool.query(
-        `SELECT id, question_id, option_text, ord
-         FROM survey_question_options
-         WHERE question_id = ANY($1::int[])
-         ORDER BY question_id, ord`,
-        [choiceQuestionIds]
-      );
-      for (const optionRow of optionsResult.rows) {
-        if (!questionOptionsMap[optionRow.question_id]) {
-          questionOptionsMap[optionRow.question_id] = [];
-        }
-        questionOptionsMap[optionRow.question_id].push({
-          id: optionRow.id,
-          option_text: optionRow.option_text,
-          ord: optionRow.ord,
+  if (!survey) {
+    throw new ForbiddenException('Survey is closed');
+  }
+
+  return this.prisma.surveyResponse.upsert({
+    where: {
+      surveyId_userId: {
+        surveyId: survey.id,
+        userId,
+      },
+    },
+    update: {
+      tookMedication: dto.took_medication ?? null,
+      wellbeingRating: dto.wellbeing_rating ?? null,
+    },
+    create: {
+      surveyId: survey.id,
+      userId,
+      tookMedication: dto.took_medication ?? null,
+      wellbeingRating: dto.wellbeing_rating ?? null,
+    },
+  });
+}
+
+
+  async updateSurvey(id: number, dto: UpdateSurveyDto) {
+    const survey = await this.prisma.survey.findUnique({ where: { id } });
+    if (!survey) throw new NotFoundException('Survey not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.survey.update({
+        where: { id },
+        data: {
+          title: dto.title,
+          description: dto.description,
+        },
+      });
+
+      if (!dto.questions) return;
+
+      await tx.surveyQuestionOption.deleteMany({
+        where: { question: { surveyId: id } },
+      });
+      await tx.surveyQuestion.deleteMany({
+        where: { surveyId: id },
+      });
+
+      for (let i = 0; i < dto.questions.length; i++) {
+        const q = dto.questions[i];
+
+        const question = await tx.surveyQuestion.create({
+          data: {
+            surveyId: id,
+            questionText: q.question_text || '',
+            questionType: q.question_type || 'text',
+            required: q.required ?? true,
+            order: i,
+          },
         });
-      }
-    }
 
-    const assembledQuestions = questions.map((question) => ({
-      id: question.id,
-      question_text: question.question_text,
-      question_type: question.question_type,
-      required: question.required,
-      ord: question.ord,
-      options: questionOptionsMap[question.id] ?? [],
-    }));
-
-    return {
-      ...survey,
-      questions: assembledQuestions,
-    };
-  }
-
-  async updateSurvey(surveyId: number, dto: UpdateSurveyDto): Promise<any> {
-    if (!dto) throw new BadRequestException('Request body is required');
-
-    const lockedCheck = await this.pool.query(`SELECT locked FROM surveys WHERE id = $1`, [surveyId]);
-    if (lockedCheck.rows.length === 0) {
-      throw new NotFoundException('Survey not found');
-    }
-    if (lockedCheck.rows[0].locked) {
-      throw new BadRequestException('Survey is locked and cannot be edited');
-    }
-
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const updateSurveyResult = await client.query(
-        `UPDATE surveys
-         SET title = COALESCE($1, title),
-             description = COALESCE($2, description),
-             active = COALESCE($3, active)
-         WHERE id = $4
-         RETURNING id, title, description, created_by, created_at, active`,
-        [dto.title ?? null, dto.description ?? null, dto.is_active ?? null, surveyId]
-      );
-
-      if (updateSurveyResult.rows.length === 0) {
-        await client.query('ROLLBACK');
-        throw new NotFoundException('Survey not found');
-      }
-
-      if (dto.questions && Array.isArray(dto.questions)) {
-        await client.query(
-          `DELETE FROM survey_question_options WHERE question_id IN (SELECT id FROM survey_questions WHERE survey_id = $1)`,
-          [surveyId]
-        );
-        await client.query(`DELETE FROM survey_questions WHERE survey_id = $1`, [surveyId]);
-
-        for (let i = 0; i < dto.questions.length; i++) {
-          await this.insertQuestionWithOptions(client, surveyId, dto.questions[i], i);
-        }
-      }
-
-      await client.query('COMMIT');
-      return updateSurveyResult.rows[0];
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  async setActive(surveyId: number, active: boolean): Promise<any> {
-    const result = await this.pool.query(
-      `UPDATE surveys SET active = $1 WHERE id = $2 RETURNING id, title, description, created_by, created_at, active`,
-      [active, surveyId]
-    );
-    if (result.rows.length === 0) {
-      throw new NotFoundException('Survey not found');
-    }
-    return result.rows[0];
-  }
-
-  async assignSurveyToUsers(surveyId: number, userIds: number[], expiresAt?: string): Promise<any> {
-    if (!Array.isArray(userIds) || userIds.length === 0) {
-      throw new BadRequestException('userIds are required');
-    }
-
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const surveyCheck = await client.query(`SELECT id FROM surveys WHERE id = $1`, [surveyId]);
-      if (surveyCheck.rows.length === 0) {
-        await client.query('ROLLBACK');
-        throw new NotFoundException('Survey not found');
-      }
-
-      const assignedRows: { user_id: number; expires_at: string | null }[] = [];
-
-      for (const userId of userIds) {
-        const insertResult = await client.query(
-          `INSERT INTO survey_assignments (survey_id, user_id, expires_at, assigned_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (survey_id, user_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
-           RETURNING user_id, expires_at`,
-          [surveyId, userId, expiresAt ?? null]
-        );
-        assignedRows.push({
-          user_id: insertResult.rows[0].user_id,
-          expires_at: insertResult.rows[0].expires_at,
-        });
-      }
-
-      await client.query('COMMIT');
-      return { assigned: assignedRows };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  async submitResponse(userId: number, surveyId: number, dto: SubmitResponseDto): Promise<{ id: number }> {
-    if (!dto) throw new BadRequestException('Request body is required');
-    if (!Array.isArray(dto.answers) || dto.answers.length === 0) {
-      throw new BadRequestException('Answers are required');
-    }
-
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const surveyCheckResult = await client.query(`SELECT id, active FROM surveys WHERE id = $1`, [surveyId]);
-      if (surveyCheckResult.rows.length === 0) {
-        await client.query('ROLLBACK');
-        throw new NotFoundException('Survey not found');
-      }
-      if (!surveyCheckResult.rows[0].active) {
-        await client.query('ROLLBACK');
-        throw new BadRequestException('Survey is not active');
-      }
-
-      const insertResponseResult = await client.query(
-        `INSERT INTO survey_responses (survey_id, user_id, submitted_at, took_medication, wellbeing_rating)
-         VALUES ($1, $2, NOW(), $3, $4) RETURNING id`,
-        [surveyId, userId, dto.took_medication ?? null, dto.wellbeing_rating ?? null]
-      );
-      const responseId: number = insertResponseResult.rows[0].id;
-
-      const questionsResult = await client.query(
-        `SELECT id, question_type, required, ord FROM survey_questions WHERE survey_id = $1 ORDER BY ord`,
-        [surveyId]
-      );
-
-      const surveyQuestionsMap = new Map<number, { question_type: string; required: boolean; ord: number }>();
-      for (const questionRow of questionsResult.rows) {
-        surveyQuestionsMap.set(questionRow.id, {
-          question_type: questionRow.question_type,
-          required: questionRow.required,
-          ord: questionRow.ord,
-        });
-      }
-
-      const ordToQuestionId = new Map<number, number>();
-      for (const [qid, info] of surveyQuestionsMap.entries()) {
-        ordToQuestionId.set(info.ord, qid);
-      }
-
-      const q3Id = ordToQuestionId.get(2);
-      const q3_yesId = ordToQuestionId.get(3);
-      const q3_noId = ordToQuestionId.get(4);
-
-      let tookMedicationAnswerText: string | null = null;
-      if (q3Id) {
-        const ans = (dto.answers as AnswerDto[]).find((a) => a.question_id === q3Id);
-        tookMedicationAnswerText = ans ? (ans.answer_text ?? (ans.answer_value !== undefined ? String(ans.answer_value) : null)) : null;
-        if (typeof tookMedicationAnswerText === 'string') tookMedicationAnswerText = tookMedicationAnswerText.trim();
-      }
-
-      if (tookMedicationAnswerText && tookMedicationAnswerText.toLowerCase() === 'tak' && q3_yesId) {
-        const hasSideEffects = (dto.answers as AnswerDto[]).some((a) => a.question_id === q3_yesId && a.answer_text && a.answer_text.trim() !== '');
-        if (!hasSideEffects) {
-          await client.query('ROLLBACK');
-          throw new BadRequestException('Jeżeli przyjąłeś leki — podaj, czy wystąpiły efekty uboczne');
-        }
-      }
-
-      if (tookMedicationAnswerText && tookMedicationAnswerText.toLowerCase() === 'nie' && q3_noId) {
-        const hasReason = (dto.answers as AnswerDto[]).some((a) => a.question_id === q3_noId && a.answer_text && a.answer_text.trim() !== '');
-        if (!hasReason) {
-          await client.query('ROLLBACK');
-          throw new BadRequestException('Jeżeli nie przyjąłeś leków — podaj przyczynę');
-        }
-      }
-
-      for (const answer of dto.answers as AnswerDto[]) {
-        const questionInfo = surveyQuestionsMap.get(answer.question_id);
-        if (!questionInfo) {
-          await client.query('ROLLBACK');
-          throw new BadRequestException(`Invalid question id: ${answer.question_id}`);
-        }
-
-        if (questionInfo.question_type === 'rating') {
-          if (typeof answer.answer_value !== 'number' || !Number.isInteger(answer.answer_value)) {
-            await client.query('ROLLBACK');
-            throw new BadRequestException(`Answer for question ${answer.question_id} must be integer 0..10`);
+        if (q.question_type === 'choice' && q.options?.length) {
+          for (let j = 0; j < q.options.length; j++) {
+            await tx.surveyQuestionOption.create({
+              data: {
+                questionId: question.id,
+                text: q.options[j].option_text || '',
+                order: j,
+              },
+            });
           }
-          if (answer.answer_value < 0 || answer.answer_value > 10) {
-            await client.query('ROLLBACK');
-            throw new BadRequestException(`Answer for question ${answer.question_id} out of range (0..10)`);
-          }
-          await client.query(`INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES ($1, $2, $3)`, [
-            responseId,
-            answer.question_id,
-            answer.answer_value,
-          ]);
-        } else if (questionInfo.question_type === 'number') {
-          let numericValue: number | null = null;
-          if (typeof answer.answer_value === 'number') {
-            numericValue = answer.answer_value;
-          } else if (answer.answer_text !== undefined && answer.answer_text !== null) {
-            const parsed = Number(answer.answer_text);
-            if (!Number.isFinite(parsed)) {
-              await client.query('ROLLBACK');
-              throw new BadRequestException(`Answer for question ${answer.question_id} must be a number`);
-            }
-            numericValue = parsed;
-          } else if (questionInfo.required) {
-            await client.query('ROLLBACK');
-            throw new BadRequestException(`Answer for question ${answer.question_id} is required`);
-          }
-          await client.query(
-            `INSERT INTO survey_answers (response_id, question_id, answer_text, answer_value) VALUES ($1, $2, $3, $4)`,
-            [responseId, answer.question_id, numericValue !== null ? String(numericValue) : null, numericValue]
-          );
-        } else {
-          const answerText = answer.answer_text ?? null;
-          if (questionInfo.required && (!answerText || answerText.trim() === '')) {
-            await client.query('ROLLBACK');
-            throw new BadRequestException(`Answer for question ${answer.question_id} is required`);
-          }
-          await client.query(`INSERT INTO survey_answers (response_id, question_id, answer_text) VALUES ($1, $2, $3)`, [
-            responseId,
-            answer.question_id,
-            answerText,
-          ]);
         }
       }
-
-      await client.query('COMMIT');
-      return { id: responseId };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
-  async listResponses(surveyId: number): Promise<any[]> {
-    const responsesResult = await this.pool.query(
-      `SELECT r.id AS response_id, r.user_id, u.username, r.submitted_at
-       FROM survey_responses r
-       LEFT JOIN users u ON u.id = r.user_id
-       WHERE r.survey_id = $1
-       ORDER BY r.submitted_at DESC`,
-      [surveyId]
-    );
+async listResponses(surveyId: number) {
+  const survey = await this.prisma.survey.findUnique({
+    where: { id: surveyId },
+  });
 
-    const responseIds = responsesResult.rows.map((row) => row.response_id);
-    let answersMap: Record<number, any[]> = {};
+  if (!survey) {
+    throw new NotFoundException('Survey not found');
+  }
 
-    if (responseIds.length > 0) {
-      const answersResult = await this.pool.query(
-        `SELECT id, response_id, question_id, answer_text, answer_value
-         FROM survey_answers
-         WHERE response_id = ANY($1::int[])
-         ORDER BY id`,
-        [responseIds]
-      );
+  const responses = await this.prisma.surveyResponse.findMany({
+    where: { surveyId },
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          role: true,
+        },
+      },
+      answers: {
+        include: {
+          question: {
+            select: {
+              id: true,
+              questionText: true,
+              questionType: true,
+            },
+          },
+        },
+      },
+    },
+  });
 
-      for (const answerRow of answersResult.rows) {
-        if (!answersMap[answerRow.response_id]) {
-          answersMap[answerRow.response_id] = [];
-        }
-        answersMap[answerRow.response_id].push({
-          id: answerRow.id,
-          question_id: answerRow.question_id,
-          answer_text: answerRow.answer_text,
-          answer_value: answerRow.answer_value,
-        });
+  return responses;
+}
+
+async getStats(surveyId: number) {
+  const survey = await this.prisma.survey.findUnique({
+    where: { id: surveyId },
+    include: {
+      questions: {
+        orderBy: { order: 'asc' },
+      },
+    },
+  });
+
+  if (!survey) {
+    throw new NotFoundException('Survey not found');
+  }
+
+  const stats = [];
+
+  for (const question of survey.questions) {
+    if (question.questionType === 'rating' || question.questionType === 'number') {
+      const answers = await this.prisma.surveyAnswer.findMany({
+        where: {
+          questionId: question.id,
+          answerValue: { not: null },
+        },
+        select: { answerValue: true },
+      });
+
+      const values = answers.map((a) => a.answerValue as number);
+      const count = values.length;
+      const avg =
+        count > 0 ? values.reduce((a, b) => a + b, 0) / count : null;
+
+      const distribution: Record<number, number> = {};
+      for (const v of values) {
+        distribution[v] = (distribution[v] ?? 0) + 1;
       }
+
+      stats.push({
+        questionId: question.id,
+        questionText: question.questionText,
+        questionType: question.questionType,
+        count,
+        avg,
+        distribution,
+      });
+
+      continue;
     }
 
-    return responsesResult.rows.map((row) => ({
-      response_id: row.response_id,
-      user_id: row.user_id,
-      username: row.username,
-      submitted_at: row.submitted_at,
-      answers: answersMap[row.response_id] ?? [],
-    }));
-  }
+    if (question.questionType === 'choice') {
+      const answers = await this.prisma.surveyAnswer.findMany({
+        where: {
+          questionId: question.id,
+          answerText: { not: null },
+        },
+        select: { answerText: true },
+      });
 
-  async getStats(surveyId: number): Promise<any> {
-    const questionsResult = await this.pool.query(
-      `SELECT id, question_text, question_type
-       FROM survey_questions
-       WHERE survey_id = $1
-       ORDER BY ord`,
-      [surveyId]
-    );
-
-    const stats: any = { surveyId, questions: [] };
-
-    for (const question of questionsResult.rows) {
-      const questionId = question.id;
-
-      if (question.question_type === 'rating' || question.question_type === 'number') {
-        const averageResult = await this.pool.query(
-          `SELECT AVG(answer_value)::numeric(10,2) AS avg_value, COUNT(answer_value) AS total_count
-           FROM survey_answers
-           WHERE question_id = $1 AND answer_value IS NOT NULL`,
-          [questionId]
-        );
-
-        const distributionResult = await this.pool.query(
-          `SELECT answer_value, COUNT(*) AS count
-           FROM survey_answers
-           WHERE question_id = $1 AND answer_value IS NOT NULL
-           GROUP BY answer_value
-           ORDER BY answer_value`,
-          [questionId]
-        );
-
-        stats.questions.push({
-          question_id: questionId,
-          question_text: question.question_text,
-          question_type: question.question_type,
-          avg: averageResult.rows[0].avg_value !== null ? Number(averageResult.rows[0].avg_value) : null,
-          count: Number(averageResult.rows[0].total_count),
-          distribution: distributionResult.rows.map((row) => ({ value: row.answer_value, count: Number(row.count) })),
-        });
-      } else if (question.question_type === 'choice') {
-        const choiceStatsResult = await this.pool.query(
-          `SELECT answer_text, COUNT(*) AS count
-           FROM survey_answers
-           WHERE question_id = $1 AND answer_text IS NOT NULL
-           GROUP BY answer_text
-           ORDER BY count DESC`,
-          [questionId]
-        );
-
-        stats.questions.push({
-          question_id: questionId,
-          question_text: question.question_text,
-          question_type: question.question_type,
-          choices: choiceStatsResult.rows.map((row) => ({ option: row.answer_text, count: Number(row.count) })),
-        });
-      } else {
-        const textCountResult = await this.pool.query(
-          `SELECT COUNT(*) AS count
-           FROM survey_answers
-           WHERE question_id = $1 AND answer_text IS NOT NULL`,
-          [questionId]
-        );
-
-        stats.questions.push({
-          question_id: questionId,
-          question_text: question.question_text,
-          question_type: question.question_type,
-          count: Number(textCountResult.rows[0].count),
-        });
+      const counts: Record<string, number> = {};
+      for (const a of answers) {
+        counts[a.answerText!] = (counts[a.answerText!] ?? 0) + 1;
       }
+
+      stats.push({
+        questionId: question.id,
+        questionText: question.questionText,
+        questionType: question.questionType,
+        options: counts,
+      });
+
+      continue;
     }
 
-    return stats;
+    const textCount = await this.prisma.surveyAnswer.count({
+      where: {
+        questionId: question.id,
+        answerText: { not: null },
+      },
+    });
+
+    stats.push({
+      questionId: question.id,
+      questionText: question.questionText,
+      questionType: question.questionType,
+      count: textCount,
+    });
   }
 
-  async restoreSurvey(surveyId: number): Promise<any> {
-    const result = await this.pool.query(
-      `UPDATE surveys SET active = TRUE WHERE id = $1 RETURNING id, title, description, created_by, created_at, active`,
-      [surveyId]
-    );
-    if (result.rows.length === 0) {
-      throw new NotFoundException('Survey not found');
-    }
-    return result.rows[0];
-  }
+  return {
+    surveyId: survey.id,
+    title: survey.title,
+    stats,
+  };
+}
 }

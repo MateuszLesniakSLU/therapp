@@ -1,18 +1,36 @@
-import { Controller, Get, Patch, Param, Body, Delete, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+  Request,
+  BadRequestException,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // GET /users (admin only)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  /**
+   * GET /users
+   * Dostęp: ADMIN
+   * Zwraca tylko aktywnych użytkowników
+   */
   @Get()
+  @Roles('admin')
   findAll() {
     return this.usersService.findAllUsers();
   }
@@ -37,41 +55,79 @@ export class UsersController {
     return this.usersService.updateUser(id, body);
   }
   
-  // GET /users/:id
-  @UseGuards(JwtAuthGuard)
+
+  /**
+   * GET /users/:id
+   * Dostęp: ADMIN
+   */
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
-    return this.usersService.findUserById(idNum);
+  @Roles('admin')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.findUserById(id);
   }
 
-  // PATCH /users/:id (update user) - self or admin could be enforced later
-  @UseGuards(JwtAuthGuard)
+  /**
+   * POST /users
+   * Dostęp: ADMIN
+   * Tworzenie nowego użytkownika
+   */
+  @Post()
+  @Roles('admin')
+  create(@Body() dto: CreateUserDto) {
+    return this.usersService.createUser(dto.username, dto.password, dto.role);
+  }
+
+  /**
+   * PATCH /users/:id
+   * Dostęp: ADMIN
+   * Aktualizacja danych użytkownika
+   */
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateUserDto) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
-    return this.usersService.updateUser(idNum, body);
+  @Roles('admin')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.updateUser(id, dto);
   }
 
-  // DELETE /users/:id (soft delete) - admin
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  /**
+   * PATCH /users/:id/password
+   * Dostęp: ADMIN + USER (własne hasło)
+   * Zmiana hasła użytkownika
+   */
+  @Patch(':id/password')
+  @Roles('admin', 'user')
+  changePassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.usersService.changePassword(
+      id,
+      dto.old_password,
+      dto.new_password,
+    );
+  }
+
+  /**
+   * DELETE /users/:id
+   * Dostęp: ADMIN
+   * SOFT DELETE — dezaktywacja użytkownika
+   */
   @Delete(':id')
-  softDelete(@Param('id') id: string) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
-    return this.usersService.softDeleteUser(idNum);
+  @Roles('admin')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.softDeleteUser(id);
   }
 
-  // PATCH /users/:id/restore (admin)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  /**
+   * PATCH /users/:id/restore
+   * Dostęp: ADMIN
+   * Przywracanie dezaktywowanego użytkownika
+   */
   @Patch(':id/restore')
-  restore(@Param('id') id: string) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
-    return this.usersService.restoreUser(idNum);
+  @Roles('admin')
+  restore(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.restoreUser(id);
   }
 }

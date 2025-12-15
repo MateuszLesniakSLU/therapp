@@ -1,85 +1,161 @@
-import { Inject, Injectable, BadRequestException } from '@nestjs/common';
-import { Pool } from 'pg';
+import {Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject('PG_POOL') private readonly pool: Pool) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAllUsers() {
-    const result = await this.pool.query(
-      `SELECT id, username, email, role, first_name, last_name, created_at
-       FROM users
-       WHERE COALESCE(deleted, FALSE) = FALSE`
-    );
-    return result.rows;
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+      },
+    });
   }
 
   async findUserById(id: number) {
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum) || idNum <= 0) throw new BadRequestException('Invalid id');
-    const result = await this.pool.query(
-      `SELECT id, username, email, role, first_name, last_name, created_at
-       FROM users
-       WHERE id = $1`,
-      [idNum]
-    );
-    return result.rows[0] || null;
+    const user =  await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    } 
+    else if (!user.isActive) {
+      throw new BadRequestException('User is deactivated');
+    }
+
+    return user;
   }
 
   async findByUsername(username: string) {
-    const result = await this.pool.query(
-      `SELECT * FROM users WHERE username = $1`,
-      [username]
-    );
-    return result.rows[0] || null;
+    return this.prisma.user.findUnique({
+      where: { username },
+    });
   }
 
-  async createUser(
-    username: string,
-    password: string,
-    email?: string,
-    role = 'patient',
-    first_name?: string,
-    last_name?: string,
-  ) {
-    const res = await this.pool.query(
-      `INSERT INTO users (username, password, email, role, first_name, last_name, created_at, deleted)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), FALSE)
-       RETURNING id, username, email, role, first_name, last_name, created_at`,
-      [username, password, email ?? null, role, first_name ?? null, last_name ?? null]
-    );
-    return res.rows[0];
+  async createUser(username: string, password: string, role: string) {
+    const exists = await this.prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (exists) {
+      throw new ConflictException('Username already exists');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    return this.prisma.user.create({
+      data: {
+        username,
+        password: hashedPassword,
+        role,
+      },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+      },
+    });
   }
 
-  async updateUser(id: number, data: { username?: string; email?: string; first_name?: string; last_name?: string }) {
-    const { username, email, first_name, last_name } = data;
-    const res = await this.pool.query(
-      `UPDATE users
-       SET username = COALESCE($1, username),
-           email = COALESCE($2, email),
-           first_name = COALESCE($3, first_name),
-           last_name = COALESCE($4, last_name)
-       WHERE id = $5
-       RETURNING id, username, email, role, first_name, last_name, created_at`,
-      [username ?? null, email ?? null, first_name ?? null, last_name ?? null, id]
-    );
-    return res.rows[0] || null;
+  async updateUser(
+  id: number,
+  data: {
+    username?: string;
+    role?: string;
+    firstName?: string;
+    lastName?: string;
+  },
+) {
+  try {
+    return await this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        first_name: true,
+        last_name: true,
+        isActive: true,
+      },
+    });
+  } catch {
+    throw new NotFoundException('User not found');
+  }
+}
+
+
+  async changePassword(id: number, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const valid = await bcrypt.compare(oldPassword, user.password);
+    if (!valid) {
+      throw new BadRequestException('Old password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword },
+    });
   }
 
   async softDeleteUser(id: number) {
-    await this.pool.query(
-      `UPDATE users SET deleted = TRUE WHERE id = $1`,
-      [id]
-    );
-    return { message: 'User marked as deleted' };
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data: { 
+          isActive: false,
+          deletedAt: new Date(),
+         },
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          isActive: true,
+        },
+      });
+    } catch {
+      throw new NotFoundException('User not found');
+    }
   }
 
   async restoreUser(id: number) {
-    const result = await this.pool.query(
-      `UPDATE users SET deleted = FALSE WHERE id = $1 RETURNING id, username, email, role, first_name, last_name, created_at`,
-      [id]
-    );
-    if (result.rows.length === 0) return { message: 'User not found' };
-    return { message: 'User restored', user: result.rows[0] };
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data: {
+          isActive: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          isActive: true,
+        },
+      });
+    } catch {
+      throw new NotFoundException('User not found');
+    }
   }
 }
