@@ -8,18 +8,24 @@ import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService, private readonly usersService: UsersService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService
+  ) {}
 
   @Public()
   @Post('register')
   async register(@Body() body: RegisterDto) {
-    const hashed = await bcrypt.hash(body.password, 10);
-    const user = await this.usersService.createUser(body.username, hashed, body.email);
-    const { password, ...result } = user;
-    return { message: 'User created', user: result };
+    const user = await this.usersService.createUser(
+      body.username, 
+      body.password,
+      body.role || 'patient');
+    return { 
+      message: 'User created',
+      user
+    };
   }
 
-  // LocalAuthGuard wykonuje validate z LocalStrategy i ustawia req.user
   @Public()
   @UseGuards(LocalAuthGuard)
   @Post('login')

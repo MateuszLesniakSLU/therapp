@@ -40,3 +40,4 @@ cache/
 coverage/
 
 postgres_data/
+pgadmin_data/
