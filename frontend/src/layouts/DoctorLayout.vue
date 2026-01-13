@@ -1,0 +1,19 @@
+<template>
+  <v-app>
+    <SidebarDoctor />
+    <v-main class="main-content">
+      <router-view />
+    </v-main>
+  </v-app>
+</template>
+
+<script setup lang="ts">
+import SidebarDoctor from '../components/sidebars/SidebarDoctor.vue'
+</script>
+
+<style scoped>
+.main-content {
+  height: 100vh;
+  overflow-y: auto;
+}
+</style>

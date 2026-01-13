@@ -23,6 +23,15 @@ model User {
   surveysCreated    Survey[]           @relation("SurveyCreator")
   surveyAssignments SurveyAssignment[]
   surveyResponses   SurveyResponse[]
+
+  // Connection fields
+  connectionCode        String?
+  connectionCodeExpires DateTime?
+
+  patientConnections    PatientTherapist[] @relation("PatientConnection")
+  therapistConnections  PatientTherapist[] @relation("TherapistConnection")
+  
+  logs ActivityLog[]
 }
 
 model Survey {
@@ -101,8 +110,34 @@ model SurveyAnswer {
   answerText  String?
   answerValue Int?
 
-  response SurveyResponse @relation(fields: [responseId], references: [id])
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   question SurveyQuestion @relation(fields: [questionId], references: [id])
 
   @@unique([responseId, questionId])
+}
+
+model PatientTherapist {
+  id          Int      @id @default(autoincrement())
+  patientId   Int
+  therapistId Int
+  status      String   @default("PENDING") // PENDING, ACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patient    User @relation("PatientConnection", fields: [patientId], references: [id])
+  therapist  User @relation("TherapistConnection", fields: [therapistId], references: [id])
+
+  @@unique([patientId, therapistId])
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  details   Json?
+  ipAddress String?
+  level     String   @default("INFO") // INFO, WARN, ERROR
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }

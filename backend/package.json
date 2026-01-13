@@ -9,6 +9,9 @@
     "test:e2e": "vitest run --config ./vitest.config.ts",
     "test:e2e:watch": "vitest --config ./vitest.config.ts"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

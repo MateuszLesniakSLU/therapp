@@ -22,7 +22,7 @@ import { Roles } from '../auth/roles.decorator';
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   /**
    * GET /users
@@ -38,6 +38,7 @@ export class UsersController {
   // GET /users/me
   @UseGuards(JwtAuthGuard)
   @Get('me')
+  @Roles('patient', 'admin', 'therapist')
   async getMe(@Request() req: any) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
@@ -48,13 +49,14 @@ export class UsersController {
   // PATCH /users/me (update own profile)
   @UseGuards(JwtAuthGuard)
   @Patch('me')
+  @Roles('patient', 'admin', 'therapist')
   async updateMe(@Request() req: any, @Body() body: UpdateUserDto) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Invalid user id in token');
     return this.usersService.updateUser(id, body);
   }
-  
+
 
   /**
    * GET /users/:id
@@ -92,20 +94,40 @@ export class UsersController {
   }
 
   /**
+   * PATCH /users/me/password
+   * Dostęp: USER + ADMIN + THERAPIST
+   * Zmiana własnego hasła
+   */
+  @Patch('me/password')
+  @Roles('patient', 'admin', 'therapist')
+  async changeMyPassword(
+    @Request() req: any,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const id = Number(req.user.userId)
+    return this.usersService.changePassword(
+      id,
+      dto.currentPassword,
+      dto.newPassword,
+    )
+  }
+
+
+  /**
    * PATCH /users/:id/password
-   * Dostęp: ADMIN + USER (własne hasło)
+   * Dostęp: ADMIN
    * Zmiana hasła użytkownika
    */
   @Patch(':id/password')
-  @Roles('admin', 'user')
+  @Roles('admin')
   changePassword(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ChangePasswordDto,
   ) {
     return this.usersService.changePassword(
       id,
-      dto.old_password,
-      dto.new_password,
+      dto.currentPassword,
+      dto.newPassword,
     );
   }
 
@@ -129,5 +151,11 @@ export class UsersController {
   @Roles('admin')
   restore(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.restoreUser(id);
+  }
+
+  @Get('stats/dashboard')
+  @Roles('admin')
+  getStats() {
+    return this.usersService.getAdminStats();
   }
 }
