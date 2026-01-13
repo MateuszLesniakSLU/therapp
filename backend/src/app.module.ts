@@ -6,12 +6,21 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { SurveysModule } from './surveys/surveys.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ConnectionsModule } from './connections/connections.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 
 @Module({
-  imports: [UsersModule, AuthModule, SurveysModule, PrismaModule],
+  imports: [
+    UsersModule,
+    AuthModule,
+    SurveysModule,
+    PrismaModule,
+    ConnectionsModule,
+    ActivityLogsModule
+  ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule { }

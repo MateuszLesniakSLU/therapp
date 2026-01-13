@@ -13,15 +13,15 @@ export class SurveySchedulerService implements OnModuleInit {
     cron.schedule(
       '0 0 * * *',
       () => {
-        this.logger.log('Running daily survey job');
+        this.logger.log('Uruchamianie codziennego cyklu ankiet...');
         this.runDailySurveyCycle().catch((err) => {
-          this.logger.error('Daily survey job failed', err);
+          this.logger.error('Nie udało się utworzyć nowej ankiety', err);
         });
       },
       { timezone: 'Europe/Warsaw' },
     );
 
-    this.logger.log('SurveySchedulerService scheduled (daily at 00:00)');
+    this.logger.log('SurveySchedulerService ustawiony na (codziennie o 00:00)');
   }
 
   async runDailySurveyCycle() {
@@ -31,7 +31,7 @@ export class SurveySchedulerService implements OnModuleInit {
     );
 
     const todayLabel = surveyDate.toISOString().split('T')[0];
-    const title = `Daily survey ${todayLabel}`;
+    const title = `Ankieta dnia ${todayLabel}`;
 
     await this.prisma.$transaction(async (tx) => {
       // Zamyka stare ankiety
@@ -47,7 +47,7 @@ export class SurveySchedulerService implements OnModuleInit {
 
       if (exists) {
         this.logger.warn(
-          `Survey for ${todayLabel} already exists — skipping`,
+          `Ankieta dla ${todayLabel} już istnieje — pomijanie tworzenia ankiety`,
         );
         return;
       }
@@ -62,7 +62,7 @@ export class SurveySchedulerService implements OnModuleInit {
       });
 
       if (patients.length === 0) {
-        this.logger.warn('No active patients — daily survey not created');
+        this.logger.warn('Brak aktywnych pacjentów — pomijanie tworzenia ankiety');
         return;
       }
 
@@ -71,9 +71,9 @@ export class SurveySchedulerService implements OnModuleInit {
         data: {
           title,
           description: 'Daily wellbeing survey',
-          date: surveyDate,        // 🔥 WYMAGANE POLE
+          date: surveyDate,
           active: true,
-          createdById: 1,          // SYSTEM / ADMIN
+          createdById: 1,
         },
       });
 
@@ -119,7 +119,7 @@ export class SurveySchedulerService implements OnModuleInit {
         skipDuplicates: true,
       });
 
-      this.logger.log(`Daily survey ${survey.id} for ${todayLabel} created`);
+      this.logger.log(`Codzienna ankieta ${survey.id} dla ${todayLabel} utworzona`);
     });
   }
 }

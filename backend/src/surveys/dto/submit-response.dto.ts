@@ -18,6 +18,9 @@ export class AnswerDto {
 }
 
 export class SubmitResponseDto {
+  @IsInt()
+  survey_id!: number
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AnswerDto)
