@@ -4,7 +4,8 @@ import { API_URL } from "../config";
 const SURVEYS_URL = `${API_URL}/surveys`;
 
 /**
- * Pobiera listę aktywnych ankiet.
+ * Pobiera listę wszystkich aktywnych ankiet dostępnych dla pacjenta.
+ * (GET /surveys)
  */
 export async function getSurveys() {
   const response = await fetch(SURVEYS_URL, {
@@ -15,8 +16,8 @@ export async function getSurveys() {
 }
 
 /**
- * Pobiera szczegóły ankiety po ID.
- * @param id ID ankiety
+ * Pobiera szczegóły konkretnej ankiety (pytania, opcje).
+ * (GET /surveys/:id)
  */
 export async function getSurveyById(id: number) {
   const response = await fetch(`${SURVEYS_URL}/${id}`, {
@@ -27,8 +28,8 @@ export async function getSurveyById(id: number) {
 }
 
 /**
- * Pobiera status wypełnionych ankiet zalogowanego pacjenta.
- * @returns Lista odpowiedzi z datami aktualizacji
+ * Sprawdza, które ankiety pacjent już wypełnił.
+ * (GET /surveys/my/status)
  */
 export async function getMySurveyStatus(): Promise<
   { surveyId: number; updatedAt: string }[]
@@ -41,8 +42,8 @@ export async function getMySurveyStatus(): Promise<
 }
 
 /**
- * Wysyła odpowiedź na ankietę.
- * @param data Dane odpowiedzi zawierające ID ankiety, odpowiedzi na pytania, info o lekach i samopoczuciu
+ * Wysyła wypełnioną ankietę do backendu.
+ * (POST /surveys/today/response)
  */
 export async function submitTodayResponse(data: {
   surveyId: number
@@ -75,9 +76,8 @@ export async function submitTodayResponse(data: {
 }
 
 /**
- * Pobiera odpowiedź użytkownika na konkretną ankietę.
- * @param surveyId ID ankiety
- * @returns Dane odpowiedzi lub null jeśli nie istnieje
+ * Pobiera historię odpowiedzi pacjenta na daną ankietę (do podglądu).
+ * (GET /surveys/my/response/:id)
  */
 export async function getMyResponse(surveyId: number) {
   const res = await fetch(
@@ -85,5 +85,6 @@ export async function getMyResponse(surveyId: number) {
     { headers: authHeaders() },
   )
   if (!res.ok) return null
-  return res.json()
+  const text = await res.text()
+  return text ? JSON.parse(text) : null
 }

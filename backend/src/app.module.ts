@@ -8,6 +8,7 @@ import { SurveysModule } from './surveys/surveys.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { ContactModule } from './contact/contact.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     SurveysModule,
     PrismaModule,
     ConnectionsModule,
-    ActivityLogsModule
+    ActivityLogsModule,
+    ContactModule
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

@@ -16,30 +16,54 @@
 
     <v-row v-if="stats">
       <v-col cols="12" md="4">
-        <v-card color="primary" variant="tonal">
-          <v-card-title>Wypełnione Ankiety</v-card-title>
-          <v-card-text class="text-h4">
-            {{ stats!.total }} / {{ stats!.period }}
-          </v-card-text>
+        <v-card class="pa-4 rounded-xl" border elevation="0">
+             <div class="d-flex align-center">
+                <v-avatar color="primary-lighten-4" class="mr-3" rounded="lg"><v-icon color="primary">mdi-clipboard-list</v-icon></v-avatar>
+                <div>
+                   <div class="text-caption font-weight-bold text-medium-emphasis">WYPEŁNIONE ANKIETY</div>
+                   <div class="text-h5 font-weight-black">{{ stats.total }} / {{ stats.period }}</div>
+                </div>
+             </div>
         </v-card>
       </v-col>
       <v-col cols="12" md="4">
-        <v-card color="secondary" variant="tonal">
-          <v-card-title>Średnie Samopoczucie</v-card-title>
-          <v-card-text class="text-h4">
-            {{ formatNum(stats!.avgWellbeing) }}
-          </v-card-text>
+        <v-card class="pa-4 rounded-xl" border elevation="0">
+             <div class="d-flex align-center">
+                <v-avatar color="secondary-lighten-4" class="mr-3" rounded="lg"><v-icon color="secondary">mdi-emoticon-outline</v-icon></v-avatar>
+                <div>
+                   <div class="text-caption font-weight-bold text-medium-emphasis">ŚREDNIE SAMOPOCZUCIE</div>
+                   <div class="text-h5 font-weight-black">{{ formatNum(stats.avgWellbeing) }}</div>
+                </div>
+             </div>
         </v-card>
       </v-col>
       <v-col cols="12" md="4">
-        <v-card :color="completionRate < 50 ? 'error' : 'success'" variant="tonal">
-          <v-card-title>Wskaźnik Wypełnień</v-card-title>
-          <v-card-text class="text-h4">
-            {{ formatNum(completionRate) }}%
-          </v-card-text>
+        <v-card class="pa-4 rounded-xl" border elevation="0">
+             <div class="d-flex align-center">
+                <v-avatar :color="completionRate < 50 ? 'error-lighten-4' : 'success-lighten-4'" class="mr-3" rounded="lg">
+                   <v-icon :color="completionRate < 50 ? 'error' : 'success'">mdi-chart-pie</v-icon>
+                </v-avatar>
+                <div>
+                   <div class="text-caption font-weight-bold text-medium-emphasis">WSKAŹNIK WYPEŁNIEŃ</div>
+                   <div class="text-h5 font-weight-black">{{ formatNum(completionRate) }}%</div>
+                </div>
+             </div>
         </v-card>
       </v-col>
     </v-row>
+
+    <v-card class="mt-6 pa-4 rounded-xl" border elevation="0" v-if="stats && stats.responses.length > 0">
+       <div class="text-subtitle-1 font-weight-bold mb-4">Historia Samopoczucia</div>
+       <div style="height: 300px">
+          <MoodChart 
+             :labels="stats.responses.map(r => formatDateShort(r.date))"
+             :data="stats.responses.map(r => r.wellbeing)"
+             gradient-start="rgba(25, 118, 210, 0.2)"
+             border-color="#1976D2"
+             :height="300"
+          />
+       </div>
+    </v-card>
 
     <v-row class="mt-6" v-if="stats">
       <v-col cols="12" md="8">
@@ -91,6 +115,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPatientStats, type PatientStats } from '../../services/therapist.service'
+import MoodChart from '../../components/MoodChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,6 +144,7 @@ const fetchStats = async () => {
 
 const formatNum = (num: number) => num.toFixed(1)
 const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('pl-PL')
+const formatDateShort = (dateStr: string) => new Date(dateStr).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })
 
 const getMoodColor = (rating: number) => {
   if (rating >= 8) return 'green'
@@ -127,7 +153,6 @@ const getMoodColor = (rating: number) => {
 }
 
 const viewSurveyResponse = (surveyId: number) => {
-  // Navigate to survey response view for this patient
   router.push(`/doctor/patients/${patientId.value}/survey/${surveyId}`)
 }
 

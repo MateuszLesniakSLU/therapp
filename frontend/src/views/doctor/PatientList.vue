@@ -7,11 +7,12 @@
       </v-btn>
     </div>
 
-    <!-- ... existing list ... -->
+    <!-- Wczytywanie -->
     <v-card v-if="loading" class="pa-4 text-center">
       <v-progress-circular indeterminate color="primary"></v-progress-circular>
     </v-card>
 
+    <!-- Lista pacjentów -->
     <v-list v-else lines="two">
       <v-list-item
         v-for="patient in patients"
@@ -27,7 +28,8 @@
         </template>
       </v-list-item>
     </v-list>
-    
+
+    <!-- brak pacjentów w liście -->
     <v-alert v-if="!loading && patients.length === 0" type="info">
       Brak przypisanych pacjentów.
     </v-alert>
@@ -111,11 +113,6 @@ const connectPatient = async () => {
     snackbar.color = 'success'
     snackbar.show = true
     closeAddDialog()
-    // Refresh list? Usually pending won't show here immediately if this list only shows active connections?
-    // Let's assume this list shows only active ones as per `getTherapistPatients` logic?
-    // If we want to accept pending here, we need another view. But per requirements flow:
-    // "Użytkownik musi zaakceptować dodatkowo to zaproszenie, będzie mu się wyświetlało to w zakładce moi doktorzy"
-    // So patient accepts. Therapist just waits.
   } catch (e: any) {
     connectError.value = e.message || 'Błąd połączenia'
   } finally {

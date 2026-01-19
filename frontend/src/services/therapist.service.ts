@@ -1,6 +1,9 @@
 import { authHeaders } from './api'
 import { API_URL } from '../config'
 
+/**
+ * Statystyki pacjenta.
+ */
 export interface PatientStats {
     patientId: number
     period: number
@@ -15,6 +18,10 @@ export interface PatientStats {
     }[]
 }
 
+/**
+ * Pobieranie listy pacjentów.
+ * (GET /surveys/my-patients)
+ */
 export async function getMyPatients() {
     const res = await fetch(`${API_URL}/surveys/my-patients`, {
         headers: authHeaders(),
@@ -23,6 +30,10 @@ export async function getMyPatients() {
     return res.json()
 }
 
+/**
+ * Pobieranie statystyk pacjenta.
+ * (GET /surveys/therapist/stats/{patientId}?days={days})
+ */
 export async function getPatientStats(patientId: number, days = 30): Promise<PatientStats> {
     const res = await fetch(`${API_URL}/surveys/therapist/stats/${patientId}?days=${days}`, {
         headers: authHeaders(),

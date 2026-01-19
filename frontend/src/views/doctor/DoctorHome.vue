@@ -12,7 +12,6 @@
     </div>
 
     <v-row v-else>
-      <!-- Summary Cards -->
       <v-col cols="12" md="4">
         <v-card color="primary" variant="tonal" class="pa-4 h-100">
           <div class="text-h2 font-weight-bold mb-1">{{ stats.totalPatients }}</div>
@@ -36,7 +35,7 @@
     </v-row>
     
     <v-row class="mt-6" v-if="!loading">
-        <!-- Low Wellbeing List -->
+        <!-- Wymagają Uwagi (Samopoczucie) -->
         <v-col cols="12" md="6">
             <v-card title="Wymagają Uwagi (Samopoczucie)" elevation="2" class="h-100">
                 <v-list v-if="stats.lowWellbeing.length > 0">
@@ -48,7 +47,7 @@
                         class="text-error"
                     >
                         <v-list-item-title class="font-weight-bold">
-                            {{ p.first_name }} {{ p.last_name }}
+                            {{ p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : p.email }}
                         </v-list-item-title>
                         <v-list-item-subtitle>
                             Średnia: {{ p.avgWellbeing.toFixed(1) }}/10
@@ -61,7 +60,7 @@
             </v-card>
         </v-col>
 
-        <!-- Missing Surveys List -->
+        <!-- Brak Aktywności -->
         <v-col cols="12" md="6">
             <v-card title="Brak Aktywności" elevation="2" class="h-100">
                 <v-list v-if="stats.missingSurveys.length > 0">
@@ -72,8 +71,8 @@
                         prepend-icon="mdi-clock-alert"
                         class="text-warning"
                     >
-                        <v-list-item-title>
-                            {{ p.first_name }} {{ p.last_name }}
+                        <v-list-item-title class="font-weight-bold">
+                            {{ p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : p.email }}
                         </v-list-item-title>
                         <v-list-item-subtitle>
                             Dni bez ankiety: {{ p.daysSinceLast }}

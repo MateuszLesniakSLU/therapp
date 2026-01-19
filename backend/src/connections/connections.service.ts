@@ -7,7 +7,7 @@ export class ConnectionsService {
 
     /**
      * Generuje 6-cyfrowy kod dla pacjenta.
-     * Kod jest ważny np. przez 24h.
+     * Kod jest ważny przez 5 minut.
      */
     async generateCode(userId: number) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -29,7 +29,6 @@ export class ConnectionsService {
      * Terapeuta wysyła prośbę o połączenie, podając kod pacjenta.
      */
     async requestConnection(therapistId: number, code: string) {
-        // Znajdź pacjenta z tym kodem
         const patient = await this.prisma.user.findFirst({
             where: {
                 connectionCode: code,
@@ -45,7 +44,6 @@ export class ConnectionsService {
             throw new BadRequestException('Ten kod nie należy do pacjenta.');
         }
 
-        // Sprawdź czy już nie są połączeni
         const existing = await this.prisma.patientTherapist.findUnique({
             where: {
                 patientId_therapistId: {
@@ -60,7 +58,6 @@ export class ConnectionsService {
             if (existing.status === 'PENDING') throw new BadRequestException('Prośba o połączenie już wysłana.');
         }
 
-        // Utwórz połączenie (PENDING)
         return this.prisma.patientTherapist.create({
             data: {
                 patientId: patient.id,
@@ -79,7 +76,7 @@ export class ConnectionsService {
                 where: { patientId: userId },
                 include: {
                     therapist: {
-                        select: { id: true, first_name: true, last_name: true, email: true, username: true },
+                        select: { id: true, first_name: true, last_name: true, email: true },
                     },
                 },
             });
@@ -88,7 +85,7 @@ export class ConnectionsService {
                 where: { therapistId: userId },
                 include: {
                     patient: {
-                        select: { id: true, first_name: true, last_name: true, email: true, username: true },
+                        select: { id: true, first_name: true, last_name: true, email: true },
                     },
                 },
             });
@@ -105,7 +102,6 @@ export class ConnectionsService {
 
         if (!connection) throw new NotFoundException('Połączenie nie znalezione.');
 
-        // Sprawdzenie uprawnień (czy user jest stroną połączenia)
         if (connection.patientId !== userId && connection.therapistId !== userId) {
             throw new BadRequestException('Brak dostępu.');
         }
@@ -117,8 +113,6 @@ export class ConnectionsService {
         }
 
         if (action === 'ACCEPT') {
-            // Tylko pacjent akceptuje (w tym flow, bo to terapeuta prosił)
-            // Ale w sumie flow jest: Patient daje kod -> Terapeuta wpisuje -> Powstaje PENDING -> Patient akceptuje w "Moi doktorzy"
             if (connection.patientId !== userId) throw new BadRequestException('Tylko pacjent może zaakceptować zaproszenie.');
 
             return this.prisma.patientTherapist.update({

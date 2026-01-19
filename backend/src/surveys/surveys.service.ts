@@ -9,15 +9,17 @@ import { CreateSurveyDto } from './dto/create-survey.dto';
 import { UpdateSurveyDto } from './dto/update-survey.dto';
 import { SubmitResponseDto, AnswerDto } from './dto/submit-response.dto';
 
+/**
+ * Serwis obsługujący ankiety.
+ * Zarządza tworzeniem ankiet, zbieraniem odpowiedzi i generowaniem statystyk.
+ */
 @Injectable()
 export class SurveysService {
   constructor(private readonly prisma: PrismaService) { }
 
   /**
-   * Tworzy nową ankietę.
-   * @param createdById ID użytkownika tworzącego ankietę
-   * @param dto Dane ankiety
-   * @throws BadRequestException jeśli ankieta nie zawiera pytań
+   * Tworzy nową ankietę wraz z pytaniami.
+   * Całość wykonuje się w transakcji bazy danych (wszystko albo nic).
    */
   async createSurvey(createdById: number, dto: CreateSurveyDto) {
     return this.prisma.$transaction(async (tx) => {
@@ -25,6 +27,7 @@ export class SurveysService {
       const surveyDate = new Date(
         now.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' }),
       );
+
       const survey = await tx.survey.create({
         data: {
           title: dto.title,
@@ -36,11 +39,10 @@ export class SurveysService {
       });
 
       if (!dto.questions || dto.questions.length === 0) {
-        throw new BadRequestException('Survey must contain at least one question');
+        throw new BadRequestException('Ankieta musi zawierać co najmniej jedno pytanie');
       }
 
       for (let i = 0; i < dto.questions.length; i++) {
-
         const questionDto = dto.questions[i];
 
         const question = await tx.surveyQuestion.create({
@@ -70,7 +72,7 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera listę aktywnych ankiet.
+   * Pobiera listę tylko aktywnych ankiet.
    */
   async listSurveys(): Promise<any[]> {
     return this.prisma.survey.findMany({
@@ -84,9 +86,7 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera szczegóły ankiety.
-   * @param id ID ankiety
-   * @throws NotFoundException jeśli ankieta nie zostanie znaleziona
+   * Pobiera pełne szczegóły ankiety włącznie z pytaniami i opcjami.
    */
   async getSurvey(id: number) {
     const survey = await this.prisma.survey.findUnique({
@@ -100,16 +100,15 @@ export class SurveysService {
     });
 
     if (!survey) {
-      throw new NotFoundException('Survey not found');
+      throw new NotFoundException('Ankieta nie znaleziona');
     }
 
     return survey;
   }
 
   /**
-   * Zapisuje odpowiedź na dzisiejszą ankietę.
-   * @param userId ID użytkownika
-   * @param dto Dane odpowiedzi
+   * Zapisuje odpowiedź pacjenta na ankietę.
+   * Jeśli pacjent już dziś wypełnił tę ankietę, stara odpowiedź jest nadpisywana.
    */
   async saveTodayResponse(userId: number, dto: SubmitResponseDto) {
     return this.prisma.$transaction(async (tx) => {
@@ -157,14 +156,12 @@ export class SurveysService {
   }
 
   /**
-   * Aktualizuje ankietę.
-   * @param id ID ankiety
-   * @param dto Dane do aktualizacji
-   * @throws NotFoundException jeśli ankieta nie zostanie znaleziona
+   * Aktualizuje istniejącą ankietę.
+   * Usuwa stare pytania i tworzy nowe.
    */
   async updateSurvey(id: number, dto: UpdateSurveyDto) {
     const survey = await this.prisma.survey.findUnique({ where: { id } });
-    if (!survey) throw new NotFoundException('Survey not found');
+    if (!survey) throw new NotFoundException('Ankieta nie znaleziona');
 
     return this.prisma.$transaction(async (tx) => {
       await tx.survey.update({
@@ -213,9 +210,7 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera listę odpowiedzi dla danej ankiety.
-   * @param surveyId ID ankiety
-   * @throws NotFoundException jeśli ankieta nie zostanie znaleziona
+   * Pobiera listę wszystkich odpowiedzi złożonych przez pacjentów na daną ankietę.
    */
   async listResponses(surveyId: number) {
     const survey = await this.prisma.survey.findUnique({
@@ -223,7 +218,7 @@ export class SurveysService {
     });
 
     if (!survey) {
-      throw new NotFoundException('Survey not found');
+      throw new NotFoundException('Ankieta nie znaleziona');
     }
 
     const responses = await this.prisma.surveyResponse.findMany({
@@ -233,7 +228,7 @@ export class SurveysService {
         user: {
           select: {
             id: true,
-            username: true,
+            email: true,
             role: true,
           },
         },
@@ -255,9 +250,7 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera statystyki dla danej ankiety.
-   * @param surveyId ID ankiety
-   * @throws NotFoundException jeśli ankieta nie zostanie znaleziona
+   * Oblicza statystyki zbiorcze dla danej ankiety (np. średnie oceny, rozkład odpowiedzi).
    */
   async getStats(surveyId: number) {
     const survey = await this.prisma.survey.findUnique({
@@ -270,7 +263,7 @@ export class SurveysService {
     });
 
     if (!survey) {
-      throw new NotFoundException('Survey not found');
+      throw new NotFoundException('Ankieta nie znaleziona');
     }
 
     const stats = [];
@@ -354,11 +347,9 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera status ankiet wypełnionych przez użytkownika.
-   * @param userId ID użytkownika
+   * Pobiera historię ankiet wypełnionych przez danego użytkownika (pacjenta).
    */
   async getMySurveyStatus(userId: number) {
-    // Usunięto nadmiarowe pierwsze zapytanie
     return this.prisma.surveyResponse.findMany({
       where: { userId },
       orderBy: { updatedAt: 'desc' },
@@ -381,13 +372,10 @@ export class SurveysService {
         }
       },
     })
-
   }
 
   /**
-   * Pobiera odpowiedź użytkownika dla konkretnej ankiety.
-   * @param userId ID użytkownika
-   * @param surveyId ID ankiety
+   * Pobiera szczegóły konkretnej odpowiedzi (dla podglądu).
    */
   async getMyResponse(userId: number, surveyId: number) {
     return this.prisma.surveyResponse.findFirst({
@@ -403,11 +391,10 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera listę pacjentów, którzy mają przypisane ankiety stworzone przez terapeutę.
-   * @param therapistId ID terapeuty
+   * Znajduje wszystkich pacjentów przypisanych do terapeuty.
+   * Szuka zarówno poprzez tabelę połączeń (PatientTherapist) jak i przez przypisane ankiety (SurveyAssignment).
    */
   async getTherapistPatients(therapistId: number) {
-    // 1. Znajdź użytkowników z ankiet stworzonych przez terapeutę
     const surveyAssignments = await this.prisma.surveyAssignment.findMany({
       where: {
         survey: {
@@ -420,45 +407,53 @@ export class SurveysService {
 
     const surveyPatientIds = surveyAssignments.map(a => a.userId);
 
-    // 2. Znajdź użytkowników z tabeli połączeń (PatientTherapist)
     const connections = await this.prisma.patientTherapist.findMany({
       where: {
         therapistId,
-        status: 'active'
+        status: 'ACTIVE'
       },
       select: { patientId: true }
     });
 
     const connectionPatientIds = connections.map(c => c.patientId);
 
-    // 3. Połącz listy ID (unikalne)
     const allPatientIds = Array.from(new Set([...surveyPatientIds, ...connectionPatientIds]));
 
-    // 4. Pobierz dane użytkowników
     return this.prisma.user.findMany({
       where: { id: { in: allPatientIds } },
       select: {
         id: true,
-        username: true,
+        email: true,
         first_name: true,
         last_name: true,
-        email: true,
-        isActive: true
+        isActive: true,
+        createdAt: true
       }
     });
   }
 
   /**
-   * Pobiera statystyki pacjenta dla terapeuty.
-   * @param patientId ID pacjenta
-   * @param days Ilość dni wstecz (np. 7, 14, 30, 365)
+   * Generuje statystyki pacjenta dla wykresów w panelu terapeuty.
+   * Oblicza średnie samopoczucie, ilość odpowiedzi i luki w wypełnianiu ankiet.
    */
   async getPatientStats(patientId: number, days: number) {
     const endDate = new Date();
-    const startDate = new Date();
+    let startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
 
-    // 1. Pobierz odpowiedzi z zakresu dat
+    const patientUser = await this.prisma.user.findUnique({
+      where: { id: patientId },
+      select: { createdAt: true }
+    });
+
+    let effectivePeriod = days;
+
+    if (patientUser && startDate < patientUser.createdAt) {
+      startDate = new Date(patientUser.createdAt);
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      effectivePeriod = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    }
+
     const responses = await this.prisma.surveyResponse.findMany({
       where: {
         userId: patientId,
@@ -477,7 +472,6 @@ export class SurveysService {
       }
     });
 
-    // 2. Oblicz statystyki podstawowe
     const total = responses.length;
     const ratings = responses
       .map(r => r.wellbeingRating)
@@ -487,23 +481,11 @@ export class SurveysService {
       ? ratings.reduce((a, b) => a + b, 0) / ratings.length
       : 0;
 
-    // 3. Wyznacz dni brakujące (Missing Surveys)
-    // Zakładamy, że pacjent powinien wypełniać ankietę codziennie?
-    // Iterujemy dzień po dniu od startDate do endDate.
     const missingDates: string[] = [];
     const responseDates = new Set(
       responses.map(r => r.updatedAt.toISOString().split('T')[0])
     );
 
-    const activeSurveys = await this.prisma.surveyAssignment.findMany({
-      where: { userId: patientId },
-      include: { survey: true }
-    });
-    // Jeśli pacjent nie ma przypisanych aktywnych ankiet w danym dniu, to nie liczmy tego jako brak.
-    // Uproszczenie: Przyjmujemy, że jeśli ma JAKĄKOLWIEK ankietę do zrobienia, to powinien ją zrobić.
-    // Lepsze podejście: Sprawdzamy czy w danym dniu była chociaż 1 odpowiedź.
-
-    // Pętla po dnaich
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
       if (!responseDates.has(dateStr)) {
@@ -513,7 +495,7 @@ export class SurveysService {
 
     return {
       patientId,
-      period: days,
+      period: effectivePeriod,
       total,
       avgWellbeing,
       responses: responses.map(r => ({
@@ -526,25 +508,13 @@ export class SurveysService {
     };
   }
 
-
-
-
   /**
-   * Przypisuje ankietę do pacjentów.
+   * Przypisuje ankietę do konkretnych pacjentów.
    */
   async assignSurvey(surveyId: number, patientIds: number[], assignedById: number) {
     const survey = await this.prisma.survey.findUnique({ where: { id: surveyId } });
-    if (!survey) throw new NotFoundException('Survey not found');
+    if (!survey) throw new NotFoundException('Ankieta nie znaleziona');
 
-    if (survey.createdById !== assignedById) {
-      // Opcjonalnie: sprawdzaj uprawnienia, czy terapeuta może przypisać tę ankietę
-    }
-
-    // Usunięcie starych przypisań dla tych pacjentów (jeśli chcemy nadpisać)
-    // Lub po prostu dodanie nowych. Przyjmijmy dodanie/zaktualizowanie.
-    // W tym modelu SurveyAssignment łączy usera i ankietę.
-
-    // Sprawdźmy czy już mają przypisaną
     const existing = await this.prisma.surveyAssignment.findMany({
       where: {
         surveyId,
@@ -569,7 +539,8 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera statystyki do dashboardu terapeuty.
+   * Główny dashboard terapeuty.
+   * Identyfikuje pacjentów wymagających uwagi (niski nastrój, brak aktywności).
    */
   async getTherapistDashboardStats(therapistId: number) {
     const patients = await this.getTherapistPatients(therapistId);
@@ -582,7 +553,6 @@ export class SurveysService {
     sevenDaysAgo.setDate(now.getDate() - 7);
 
     for (const patient of patients) {
-      // Calculate Avg Wellbeing (last 7 days)
       const responses = await this.prisma.surveyResponse.findMany({
         where: {
           userId: patient.id,
@@ -594,29 +564,25 @@ export class SurveysService {
       const ratings = responses.map(r => r.wellbeingRating).filter(r => r !== null) as number[];
       const avg = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
 
-      if (ratings.length > 0 && avg < 4) { // Threshold for "Low Wellbeing"
+      if (ratings.length > 0 && avg < 4) {
         lowWellbeingPatients.push({
           ...patient,
           avgWellbeing: avg
         });
       }
 
-      // Check for missing survey TODAY
-      const today = now.toISOString().split('T')[0];
+      const lastActivityDate = responses.length > 0
+        ? new Date(responses[responses.length - 1].updatedAt)
+        : new Date(patient.createdAt);
 
-      // Simple logic: if no response today (and maybe yesterday?), flag it.
-      // Let's flag if no response in last 3 days for alert
-      if (responses.length === 0) {
-        missingSurveyPatients.push({ ...patient, daysSinceLast: '7+' });
-      } else {
-        // Calculate days diff
-        const last = new Date(responses[responses.length - 1].updatedAt);
-        const diffTime = Math.abs(now.getTime() - last.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = now.getTime() - lastActivityDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 2) {
-          missingSurveyPatients.push({ ...patient, daysSinceLast: diffDays });
-        }
+      if (diffDays > 2) {
+        missingSurveyPatients.push({
+          ...patient,
+          daysSinceLast: diffDays
+        });
       }
     }
 

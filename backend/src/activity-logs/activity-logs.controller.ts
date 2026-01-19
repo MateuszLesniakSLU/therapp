@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
-import { ActivityLogsService } from './activity-logs.service'; // Check path
+import { ActivityLogsService } from './activity-logs.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';

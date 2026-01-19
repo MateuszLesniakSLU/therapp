@@ -54,11 +54,11 @@
           <v-list-item-title>
             <span v-if="role === 'patient'">
               {{ conn.therapist?.first_name }} {{ conn.therapist?.last_name }} 
-              ({{ conn.therapist?.username }})
+              ({{ conn.therapist?.email }})
             </span>
             <span v-else>
                {{ conn.patient?.first_name }} {{ conn.patient?.last_name }}
-               ({{ conn.patient?.username }})
+               ({{ conn.patient?.email }})
             </span>
           </v-list-item-title>
 
@@ -68,7 +68,6 @@
 
           <template v-slot:append>
             <div class="d-flex gap-2">
-              <!-- Tylko pacjent akceptuje -->
               <v-btn
                 v-if="role === 'patient' && conn.status === 'PENDING'"
                 color="success"

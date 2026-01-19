@@ -6,24 +6,19 @@
           <AppLogo :height="150" />
         </div>
         <v-card-title class="text-h6 text-center">
-          Logowanie
+          Zapomniałeś hasła?
         </v-card-title>
 
         <v-card-text>
-          <v-form @submit.prevent="login">
+          <p class="text-body-2 text-grey mb-4 text-center">
+            Podaj swój adres email, a wyślemy Ci link do zresetowania hasła.
+          </p>
+
+          <v-form @submit.prevent="submit" v-if="!success">
             <v-text-field
               v-model="email"
               label="Email"
               type="email"
-              required
-            />
-
-            <v-text-field
-              v-model="password"
-              label="Hasło"
-              :type="showPassword ? 'text' : 'password'"
-              :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-              @click:append-inner="showPassword = !showPassword"
               required
             />
 
@@ -34,7 +29,7 @@
               :loading="loading"
               class="mt-4"
             >
-              Zaloguj się
+              Wyślij link
             </v-btn>
           </v-form>
 
@@ -47,18 +42,20 @@
             {{ error }}
           </v-alert>
 
-          <div class="text-center mt-4">
-            <router-link to="/forgot-password" class="text-primary text-decoration-none">
-              Zapomniałeś hasła?
-            </router-link>
-          </div>
+          <v-alert
+            v-if="success"
+            type="success"
+            class="mt-3"
+            variant="tonal"
+          >
+            {{ successMessage }}
+          </v-alert>
 
           <v-divider class="my-4"></v-divider>
 
           <div class="text-center">
-            <span class="text-grey">Nie masz konta? </span>
-            <router-link to="/register" class="text-primary text-decoration-none font-weight-bold">
-              Zarejestruj się
+            <router-link to="/login" class="text-primary text-decoration-none">
+              Wróć do logowania
             </router-link>
           </div>
         </v-card-text>
@@ -70,32 +67,27 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.store'
 import AppLogo from '../components/AppLogo.vue'
 
 const auth = useAuthStore()
-const router = useRouter()
 
 const email = ref('')
-const password = ref('')
-const showPassword = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const success = ref(false)
+const successMessage = ref('')
 
-const login = async () => {
+const submit = async () => {
   loading.value = true
   error.value = null
 
   try {
-    await auth.login(email.value, password.value)
-
-    if (auth.role === 'patient') router.push('/patient')
-    if (auth.role === 'therapist') router.push('/doctor')
-    if (auth.role === 'admin') router.push('/admin')
-
+    const result = await auth.forgotPassword(email.value)
+    success.value = true
+    successMessage.value = result.message || 'Jeśli konto istnieje, link do resetowania hasła został wysłany.'
   } catch (e: any) {
-    error.value = e.message || 'Błąd logowania'
+    error.value = e.message || 'Błąd wysyłania'
   } finally {
     loading.value = false
   }

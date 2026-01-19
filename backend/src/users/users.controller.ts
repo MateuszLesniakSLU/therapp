@@ -19,15 +19,17 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
+/**
+ * Kontroler obsługujący użytkowników.
+ * Większość endpointów jest zabezpieczona (wymaga logowania i odpowiedniej roli).
+ */
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
   /**
-   * GET /users
-   * Dostęp: ADMIN
-   * Zwraca tylko aktywnych użytkowników
+   * Pobiera listę użytkowników.
    */
   @Get()
   @Roles('admin')
@@ -35,32 +37,34 @@ export class UsersController {
     return this.usersService.findAllUsers();
   }
 
-  // GET /users/me
-  @UseGuards(JwtAuthGuard)
+  /**
+   * Pobiera dane AKTUALNIE zalogowanego użytkownika ("Mój profil").
+   * ID użytkownika jest pobierane z tokenu JWT.
+   */
   @Get('me')
   @Roles('patient', 'admin', 'therapist')
   async getMe(@Request() req: any) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
-    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Invalid user id in token');
+    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Nieprawidłowe ID użytkownika w tokenie');
     return this.usersService.findUserById(id);
   }
 
-  // PATCH /users/me (update own profile)
-  @UseGuards(JwtAuthGuard)
+  /**
+   * Aktualizacja własnego profilu.
+   */
   @Patch('me')
   @Roles('patient', 'admin', 'therapist')
   async updateMe(@Request() req: any, @Body() body: UpdateUserDto) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
-    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Invalid user id in token');
+    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Nieprawidłowe ID użytkownika w tokenie');
     return this.usersService.updateUser(id, body);
   }
 
 
   /**
-   * GET /users/:id
-   * Dostęp: ADMIN
+   * Pobranie dowolnego użytkownika po ID.
    */
   @Get(':id')
   @Roles('admin')
@@ -69,20 +73,16 @@ export class UsersController {
   }
 
   /**
-   * POST /users
-   * Dostęp: ADMIN
-   * Tworzenie nowego użytkownika
+   * Stworzenie nowego użytkownika ręcznie.
    */
   @Post()
   @Roles('admin')
   create(@Body() dto: CreateUserDto) {
-    return this.usersService.createUser(dto.username, dto.password, dto.role);
+    return this.usersService.createUser(dto.email, dto.password, dto.role);
   }
 
   /**
-   * PATCH /users/:id
-   * Dostęp: ADMIN
-   * Aktualizacja danych użytkownika
+   * Edycja dowolnego użytkownika.
    */
   @Patch(':id')
   @Roles('admin')
@@ -94,9 +94,7 @@ export class UsersController {
   }
 
   /**
-   * PATCH /users/me/password
-   * Dostęp: USER + ADMIN + THERAPIST
-   * Zmiana własnego hasła
+   * Zmiana własnego hasła.
    */
   @Patch('me/password')
   @Roles('patient', 'admin', 'therapist')
@@ -114,9 +112,7 @@ export class UsersController {
 
 
   /**
-   * PATCH /users/:id/password
-   * Dostęp: ADMIN
-   * Zmiana hasła użytkownika
+   * Zmiana hasła innemu użytkownikowi (reset).
    */
   @Patch(':id/password')
   @Roles('admin')
@@ -132,9 +128,7 @@ export class UsersController {
   }
 
   /**
-   * DELETE /users/:id
-   * Dostęp: ADMIN
-   * SOFT DELETE — dezaktywacja użytkownika
+   * Dezaktywacja konta użytkownika.
    */
   @Delete(':id')
   @Roles('admin')
@@ -143,9 +137,7 @@ export class UsersController {
   }
 
   /**
-   * PATCH /users/:id/restore
-   * Dostęp: ADMIN
-   * Przywracanie dezaktywowanego użytkownika
+   * Przywrócenie konta użytkownika.
    */
   @Patch(':id/restore')
   @Roles('admin')
@@ -153,6 +145,9 @@ export class UsersController {
     return this.usersService.restoreUser(id);
   }
 
+  /**
+   * Pobranie statystyk dla admina.
+   */
   @Get('stats/dashboard')
   @Roles('admin')
   getStats() {

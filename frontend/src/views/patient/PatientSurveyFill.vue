@@ -2,26 +2,22 @@
   <v-container>
     <h1 class="mb-6">{{ survey?.title }}</h1>
 
-    <!-- ERROR -->
     <v-alert v-if="error" type="error" class="mb-4">
       {{ error }}
     </v-alert>
 
-    <!-- LOADING -->
     <v-progress-circular
       v-if="loadingSurvey"
       indeterminate
       color="primary"
     />
 
-    <!-- FORM -->
     <v-form v-if="survey" @submit.prevent="submit">
       <div
         v-for="question in orderedQuestions"
         :key="question.id"
         class="mb-6"
       >
-        <!-- TEXT -->
         <v-text-field
           v-if="isTextVisible(question)"
           v-model="answers[question.id]"
@@ -29,7 +25,6 @@
           :required="question.required"
         />
 
-        <!-- RATING -->
         <div v-else-if="question.questionType === 'rating'">
           <div class="d-flex justify-space-between mb-1">
             <span>{{ question.questionText }}</span>
@@ -45,7 +40,6 @@
           />
         </div>
 
-        <!-- CHOICE -->
         <v-radio-group
           v-else-if="question.questionType === 'choice'"
           v-model="answers[question.id]"
@@ -69,7 +63,6 @@
       </v-btn>
     </v-form>
 
-    <!-- SUCCESS -->
     <v-snackbar v-model="showSuccess" color="success">
       Ankieta została zapisana
     </v-snackbar>
@@ -85,7 +78,6 @@ import {
   getMyResponse,
 } from '../../services/survey.service'
 
-/* ---------- types ---------- */
 
 interface SurveyQuestion {
   id: number
@@ -96,7 +88,6 @@ interface SurveyQuestion {
   options?: { id: number; text: string }[]
 }
 
-/* ---------- state ---------- */
 
 const route = useRoute()
 const router = useRouter()
@@ -109,7 +100,6 @@ const submitting = ref(false)
 const showSuccess = ref(false)
 const error = ref<string | null>(null)
 
-/* ---------- computed ---------- */
 
 const orderedQuestions = computed<SurveyQuestion[]>(() =>
   survey.value
@@ -117,7 +107,6 @@ const orderedQuestions = computed<SurveyQuestion[]>(() =>
     : [],
 )
 
-/** pytanie TAK / NIE */
 const medsQuestion = computed<SurveyQuestion | undefined>(() =>
   orderedQuestions.value.find(
     (q: SurveyQuestion) =>
@@ -127,7 +116,6 @@ const medsQuestion = computed<SurveyQuestion | undefined>(() =>
   ),
 )
 
-/** pytania warunkowe */
 const ifYesQuestion = computed<SurveyQuestion | undefined>(() =>
   orderedQuestions.value.find(q =>
     q.questionText.toLowerCase().includes('jeżeli tak'),
@@ -144,7 +132,6 @@ const tookMeds = computed(() =>
   medsQuestion.value ? answers.value[medsQuestion.value.id] : null,
 )
 
-/* ---------- helpers ---------- */
 
 const isTextVisible = (question: SurveyQuestion) => {
   if (question.questionType !== 'text') return false
@@ -160,7 +147,6 @@ const isTextVisible = (question: SurveyQuestion) => {
   return true
 }
 
-/* ---------- watchers ---------- */
 
 watch(tookMeds, value => {
   if (value === 'Tak' && ifNoQuestion.value) {
@@ -171,7 +157,6 @@ watch(tookMeds, value => {
   }
 })
 
-/* ---------- lifecycle ---------- */
 
 onMounted(async () => {
   loadingSurvey.value = true
@@ -179,10 +164,8 @@ onMounted(async () => {
     const surveyId = Number(route.params.id)
     survey.value = await getSurveyById(surveyId)
 
-    // Load existing response if any
     const existingResponse = await getMyResponse(surveyId)
     if (existingResponse) {
-      // Pre-fill answers from existing response
       for (const answer of existingResponse.answers) {
         if (answer.question.questionType === 'rating') {
           answers.value[answer.questionId] = answer.answerValue
@@ -198,7 +181,6 @@ onMounted(async () => {
   }
 })
 
-/* ---------- submit ---------- */
 
 const submit = async () => {
   if (!survey.value) return

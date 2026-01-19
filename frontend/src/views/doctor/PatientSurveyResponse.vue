@@ -16,7 +16,7 @@
     <div v-else-if="response">
       <v-row>
         <v-col cols="12">
-          <v-card class="mb-4">
+          <v-card class="mb-4 pb-4">
             <v-card-title>{{ response.survey?.title || 'Ankieta' }}</v-card-title>
             <v-card-subtitle>
               Data wypełnienia: {{ formatDate(response.updatedAt) }}
@@ -47,9 +47,9 @@
         </v-col>
       </v-row>
 
-      <v-row class="mt-4">
+      <v-row class="mt-4 mb-16">
         <v-col cols="12">
-          <v-card title="Szczegóły odpowiedzi">
+          <v-card title="Szczegóły odpowiedzi" class="pb-10">
             <v-list>
               <v-list-item v-for="answer in response.answers" :key="answer.id" lines="two">
                 <v-list-item-title class="font-weight-bold">
@@ -102,7 +102,6 @@ const fetchResponse = async () => {
       throw new Error('Nie udało się pobrać odpowiedzi')
     }
     const data = await res.json()
-    // Find the response for this specific patient
     response.value = data.find((r: any) => r.userId === patientId) || data[0] || null
   } catch (e: any) {
     error.value = e.message || 'Błąd ładowania danych'

@@ -56,3 +56,7 @@ Aplikacja terapeutyczna zbudowana w oparciu o **NestJS** (Backend) oraz **Vue 3 
    ```bash
    npm run dev
    ```
+
+## Dokumentacja Techniczna
+Szczegółowy opis architektury, endpointów, bezpieczeństwa oraz komunikacji w aplikacji znajduje się w pliku:
+👉 [DOKUMENTACJA_TECHNICZNA.md](./DOKUMENTACJA_TECHNICZNA.md)

@@ -14,8 +14,8 @@
       <v-col cols="12" md="8">
         <v-card
           :color="todaySurveyCompleted ? 'success-lighten-4' : 'primary-lighten-4'"
-          class="pa-4 mb-6"
-          elevation="2"
+          class="pa-4 mb-6 rounded-xl border-0"
+          elevation="0"
         >
           <div class="d-flex flex-column flex-sm-row align-center justify-space-between">
             <div class="mb-3 mb-sm-0">
@@ -34,33 +34,45 @@
               prepend-icon="mdi-clipboard-check"
               to="/patient/surveys"
               size="large"
+              rounded="lg"
+              elevation="2"
             >
               Wypełnij teraz
             </v-btn>
             <v-icon
               v-else
-              icon="mdi-check-decagram"
+              icon="mdi-check-circle"
               color="success"
               size="64"
             ></v-icon>
           </div>
         </v-card>
 
-        <!-- Cytat Dnia -->
-        <v-card class="pa-6 mt-6 quote-card" elevation="2">
-            <v-icon icon="mdi-format-quote-open" size="48" color="primary" class="mb-2 opacity-50"></v-icon>
-            <blockquote class="text-h5 font-italic font-weight-light mb-4 text-center">
-              "{{ quote.text }}"
-            </blockquote>
-            <div class="text-right text-subtitle-2 font-weight-bold text-grey-darken-2">
-              — {{ quote.author }}
-            </div>
+        <v-card class="pa-6 mb-6 rounded-xl" elevation="0" border v-if="chartData.length > 0">
+           <div class="d-flex align-center justify-space-between mb-4">
+             <div>
+               <div class="text-caption text-medium-emphasis font-weight-bold">TWOJE SAMOPOCZUCIE</div>
+               <div class="text-h5 font-weight-black">Ostatnie 7 dni</div>
+             </div>
+             <v-chip color="primary" size="small" variant="flat" label>
+                Średnia: {{ (chartData.reduce((a, b) => a + b, 0) / chartData.length).toFixed(1) }}
+             </v-chip>
+           </div>
+           <div style="height: 200px">
+              <MoodChart 
+                :labels="chartLabels" 
+                :data="chartData" 
+                gradient-start="rgba(25, 118, 210, 0.4)"
+                border-color="#1976D2"
+                :height="200"
+              />
+           </div>
         </v-card>
+
       </v-col>
 
-      <!-- Szybkie Akcje -->
       <v-col cols="12" md="4">
-        <v-card title="Szybkie akcje" class="h-100">
+        <v-card title="Szybkie akcje" class="mb-6 rounded-xl" elevation="0" border>
           <v-list>
             <v-list-item
               to="/patient/history"
@@ -79,6 +91,16 @@
             ></v-list-item>
           </v-list>
         </v-card>
+
+        <v-card class="pa-6 quote-card rounded-xl" elevation="2">
+            <v-icon icon="mdi-format-quote-open" size="48" color="primary" class="mb-2 opacity-50"></v-icon>
+            <blockquote class="text-h6 font-italic font-weight-light mb-4 text-center">
+              "{{ quote?.text }}"
+            </blockquote>
+            <div class="text-right text-subtitle-2 font-weight-bold text-medium-emphasis">
+              — {{ quote?.author }}
+            </div>
+        </v-card>
       </v-col>
     </v-row>
   </v-container>
@@ -89,12 +111,15 @@ import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../../stores/auth.store'
 import { authHeaders } from '../../services/api'
 import { API_URL } from '../../config'
+import MoodChart from '../../components/MoodChart.vue'
 
 const auth = useAuthStore()
 const user = computed(() => auth.user)
 
 const todaySurveyCompleted = ref(false)
 const loading = ref(true)
+const chartLabels = ref<string[]>([])
+const chartData = ref<number[]>([])
 
 const quotes = [
   { text: "Każdy dzień to nowa szansa, aby zmienić swoje życie.", author: "Nieznany" },
@@ -114,13 +139,18 @@ const checkSurveyStatus = async () => {
     
     if (res.ok) {
         const data = await res.json()
-        // Check if any response is from today
         const today = new Date().toISOString().split('T')[0]
         const completed = data.some((r: any) => {
             const rDate = new Date(r.updatedAt).toISOString().split('T')[0]
             return rDate === today
         })
         todaySurveyCompleted.value = completed
+
+        const rated = data.filter((r: any) => r.wellbeingRating !== null)
+        const last7 = rated.slice(0, 7).reverse()
+        
+        chartLabels.value = last7.map((r: any) => new Date(r.updatedAt).toLocaleDateString('pl-PL', { weekday: 'short' }))
+        chartData.value = last7.map((r: any) => r.wellbeingRating)
     }
   } catch (e) {
     console.error('Failed to check survey status', e)
@@ -135,14 +165,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.success-lighten-4 {
-    background-color: #E8F5E9;
-}
-.primary-lighten-4 {
-    background-color: #E3F2FD;
-}
 .quote-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%);
     border-left: 4px solid #1976D2;
 }
 </style>

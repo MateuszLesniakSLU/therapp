@@ -111,7 +111,7 @@ import {
   getMe,
   updateMe,
   changeMyPassword,
-} from '../services/patient.service' // Zakładamy, że ta usługa jest uniwersalna dla zalogowanego usera
+} from '../services/patient.service'
 
 const uiStore = useUiStore()
 const theme = useTheme()
@@ -140,9 +140,7 @@ const password = reactive({
 watch(
   () => uiStore.isDark,
   (val) => {
-    // @ts-ignore
     if (typeof theme.change === 'function') {
-      // @ts-ignore
       theme.change(val ? 'dark' : 'light')
     } else {
       theme.global.name.value = val ? 'dark' : 'light'

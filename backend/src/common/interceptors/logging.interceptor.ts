@@ -26,13 +26,10 @@ export class LoggingInterceptor implements NestInterceptor {
 
         return next.handle().pipe(
             tap(() => {
-                // Optional: Log success for specific critical actions if needed
-                // For now we rely on explicit service calls for important successes
             }),
             catchError((error) => {
                 if (user && user.userId) {
                     const status = error instanceof HttpException ? error.getStatus() : 500;
-                    // Log errors (4xx/5xx)
                     this.logsService.createLog(
                         user.userId,
                         `ERROR_Request`,
@@ -44,7 +41,7 @@ export class LoggingInterceptor implements NestInterceptor {
                         },
                         ip,
                         'ERROR'
-                    ).catch(err => this.logger.error('Failed to log error to DB', err));
+                    ).catch(err => this.logger.error('Nie udało się zapisać logu do bazy', err));
                 }
                 return throwError(() => error);
             }),

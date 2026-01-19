@@ -4,7 +4,7 @@ import { ActivityLogsController } from './activity-logs.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule], // Needed for service
+  imports: [PrismaModule],
   providers: [ActivityLogsService],
   controllers: [ActivityLogsController],
   exports: [ActivityLogsService],

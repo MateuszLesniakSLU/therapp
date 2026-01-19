@@ -9,6 +9,8 @@ import { UsersModule } from '../users/users.module';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
+import { EmailModule } from '../email/email.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
@@ -18,10 +20,13 @@ import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
       signOptions: { expiresIn: '1h' },
     }),
     UsersModule,
-    ActivityLogsModule
+    ActivityLogsModule,
+    EmailModule,
+    PrismaModule
   ],
   providers: [AuthService, LocalStrategy, JwtStrategy, JwtAuthGuard, RolesGuard],
   controllers: [AuthController],
   exports: [AuthService],
 })
 export class AuthModule { }
+

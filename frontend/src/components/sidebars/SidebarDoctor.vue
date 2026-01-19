@@ -7,7 +7,7 @@
     <v-divider></v-divider>
 
     <v-list>
-      <v-list-item to="/doctor" prepend-icon="mdi-view-dashboard" title="Pulpit"></v-list-item>
+      <v-list-item to="/doctor" exact prepend-icon="mdi-view-dashboard" title="Pulpit"></v-list-item>
       <v-list-item to="/doctor/patients" prepend-icon="mdi-account-group" title="Moi Pacjenci"></v-list-item>
       <v-list-item to="/doctor/settings" prepend-icon="mdi-cog" title="Ustawienia Konta"></v-list-item>
     </v-list>
@@ -24,14 +24,11 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '../../stores/auth.store'
-import { useRouter } from 'vue-router'
 import AppLogo from '../AppLogo.vue'
 
 const auth = useAuthStore()
-const router = useRouter()
 
 const logout = () => {
   auth.logout()
-  router.push('/login')
 }
 </script>

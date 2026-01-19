@@ -12,21 +12,20 @@
     </div>
 
     <v-row v-else>
-        <!-- Total Users -->
       <v-col cols="12" md="4">
         <v-card color="info" variant="tonal" class="pa-4 h-100">
           <div class="text-h2 font-weight-bold mb-1">{{ stats.totalUsers }}</div>
           <div class="text-subtitle-1 font-weight-medium">Wszystkich Użytkowników</div>
         </v-card>
       </v-col>
-      <!-- Active Users -->
+      
        <v-col cols="12" md="4">
         <v-card color="success" variant="tonal" class="pa-4 h-100">
           <div class="text-h2 font-weight-bold mb-1">{{ stats.activeUsers }}</div>
           <div class="text-subtitle-1 font-weight-medium">Aktywnych Kont</div>
         </v-card>
       </v-col>
-      <!-- New Users -->
+
        <v-col cols="12" md="4">
         <v-card color="primary" variant="tonal" class="pa-4 h-100">
           <div class="text-h2 font-weight-bold mb-1">{{ stats.newUsers }}</div>

@@ -5,8 +5,33 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/',
+      component: () => import('../views/LandingView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/login',
       component: LoginView,
+      meta: { guestOnly: true },
+    },
+    {
+      path: '/register',
+      component: () => import('../views/RegisterView.vue'),
+      meta: { guestOnly: true },
+    },
+    {
+      path: '/forgot-password',
+      component: () => import('../views/ForgotPasswordView.vue'),
+      meta: { guestOnly: true },
+    },
+    {
+      path: '/reset-password/:token',
+      component: () => import('../views/ResetPasswordView.vue'),
+      meta: { guestOnly: true },
+    },
+    {
+      path: '/verify-email/:token',
+      component: () => import('../views/VerifyEmailView.vue'),
       meta: { guestOnly: true },
     },
 
@@ -56,7 +81,9 @@ router.beforeEach((to) => {
   const token = localStorage.getItem('token')
   const role = localStorage.getItem('role')
 
-  if (!token && to.path !== '/login') return '/login'
+  if (to.meta.public) return
+
+  if (!token && !to.meta.guestOnly) return '/login'
 
   if (token && to.meta.guestOnly) {
     if (role === 'patient') return '/patient'
@@ -66,3 +93,4 @@ router.beforeEach((to) => {
 
   if (to.meta.role && to.meta.role !== role) return '/login'
 })
+

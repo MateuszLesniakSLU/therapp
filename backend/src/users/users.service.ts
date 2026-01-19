@@ -2,144 +2,147 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+/**
+ * Serwis zarządzający użytkownikami.
+ * Odpowiada za operacje na bazie danych (CRUD) dotyczące tabeli User.
+ */
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
   /**
-   * Pobiera wszystkich użytkowników.
+   * Pobiera wszystkich użytkowników z bazy.
    */
   async findAllUsers() {
     return this.prisma.user.findMany({
       select: {
         id: true,
-        username: true,
+        email: true,
         role: true,
+        first_name: true,
+        last_name: true,
         isActive: true,
+        isVerified: true,
+        createdAt: true,
       },
     });
   }
 
   /**
-   * Pobiera pojedynczego użytkownika po ID.
-   * @param id ID użytkownika
-   * @throws NotFoundException jeśli użytkownik nie zostanie znaleziony
-   * @throws BadRequestException jeśli użytkownik jest nieaktywny
+   * Szuka jednego użytkownika na podstawie ID.
+   * Sprawdza czy użytkownik istnieje oraz czy jest aktywny.
    */
   async findUserById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
-        username: true,
+        email: true,
         role: true,
+        first_name: true,
+        last_name: true,
         isActive: true,
+        isVerified: true,
       },
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Użytkownik nie znaleziony');
     }
+
     if (!user.isActive) {
-      throw new BadRequestException('User is deactivated');
+      throw new BadRequestException('Użytkownik jest nieaktywny');
     }
 
     return user;
   }
 
   /**
-   * Pobiera użytkownika po nazwie użytkownika.
-   * @param username Nazwa użytkownika
+   * Pomocnicza metoda szukająca po e-mailu.
+   * Wykorzystywana głównie przy logowaniu.
    */
-  async findByUsername(username: string) {
+  async findByEmail(email: string) {
     return this.prisma.user.findUnique({
-      where: { username },
+      where: { email },
     });
   }
 
   /**
-   * Tworzy nowego użytkownika.
-   * @param username Nazwa użytkownika
-   * @param password Hasło
-   * @param role Rola
-   * @throws ConflictException jeśli nazwa użytkownika już istnieje
+   * Tworzy nowego użytkownika (np. przez administratora).
+   * Sprawdza unikalność maila i hashuje hasło.
    */
-  async createUser(username: string, password: string, role: string) {
+  async createUser(email: string, password: string, role: string) {
     const exists = await this.prisma.user.findUnique({
-      where: { username },
+      where: { email },
     });
 
     if (exists) {
-      throw new ConflictException('Username already exists');
+      throw new ConflictException('Email jest już zajęty');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     return this.prisma.user.create({
       data: {
-        username,
+        email,
         password: hashedPassword,
         role,
       },
       select: {
         id: true,
-        username: true,
+        email: true,
         role: true,
       },
     });
   }
 
   /**
-   * Aktualizuje dane użytkownika.
-   * @param id ID użytkownika
-   * @param data Dane do aktualizacji
-   * @throws NotFoundException jeśli użytkownik nie zostanie znaleziony (poprzez Prisma P2025)
+   * Aktualizuje wybrane pola użytkownika.
+   * Obsługuje elastyczne DTO oraz normalizację pól imienia i nazwiska.
    */
   async updateUser(
     id: number,
     data: {
-      username?: string;
       role?: string;
       firstName?: string;
       lastName?: string;
+      first_name?: string;
+      last_name?: string;
       email?: string;
     },
   ) {
     try {
+      const firstName = data.firstName || data.first_name;
+      const lastName = data.lastName || data.last_name;
+
       return await this.prisma.user.update({
         where: { id },
         data: {
-          ...(data.username && { username: data.username }),
           ...(data.role && { role: data.role }),
-          ...(data.firstName && { first_name: data.firstName }),
-          ...(data.lastName && { last_name: data.lastName }),
+          ...(firstName && { first_name: firstName }),
+          ...(lastName && { last_name: lastName }),
           ...(data.email && { email: data.email }),
         },
         select: {
           id: true,
-          username: true,
+          email: true,
           role: true,
           first_name: true,
           last_name: true,
-          email: true,
           isActive: true,
         },
       });
     } catch (error: any) {
       if (error.code === 'P2025') {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Użytkownik nie znaleziony');
       }
       throw error;
     }
   }
 
   /**
-   * Zmienia hasło użytkownika.
-   * @param id ID użytkownika
-   * @param oldPassword Stare hasło
-   * @param newPassword Nowe hasło
-   * @throws NotFoundException jeśli użytkownik nie zostanie znaleziony
-   * @throws BadRequestException jeśli stare hasło jest nieprawidłowe
+   * Zmiana hasła przez użytkownika.
+   * Wymaga podania i weryfikacji starego hasła.
    */
   async changePassword(id: number, oldPassword: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({
@@ -147,12 +150,12 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Użytkownik nie znaleziony');
     }
 
     const valid = await bcrypt.compare(oldPassword, user.password);
     if (!valid) {
-      throw new BadRequestException('Old password is incorrect');
+      throw new BadRequestException('Stare hasło jest nieprawidłowe');
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -164,9 +167,8 @@ export class UsersService {
   }
 
   /**
-   * Usuwa użytkownika (soft delete, ustawia isActive = false).
-   * @param id ID użytkownika
-   * @throws NotFoundException jeśli użytkownik nie zostanie znaleziony
+   * "Soft delete" - nie usuwa rekordu fizycznie, tylko oznacza jako nieaktywny.
+   * Pozwala to na zachowanie historii danych.
    */
   async softDeleteUser(id: number) {
     try {
@@ -178,7 +180,33 @@ export class UsersService {
         },
         select: {
           id: true,
-          username: true,
+          email: true,
+          role: true,
+          isActive: true,
+        },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        throw new NotFoundException('Użytkownik nie znaleziony');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Przywraca usuniętego użytkownika (ustawia flagę active na true).
+   */
+  async restoreUser(id: number) {
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data: {
+          isActive: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          email: true,
           role: true,
           isActive: true,
         },
@@ -192,33 +220,8 @@ export class UsersService {
   }
 
   /**
-   * Przywraca usuniętego użytkownika (ustawia isActive = true).
-   * @param id ID użytkownika
-   * @throws NotFoundException jeśli użytkownik nie zostanie znaleziony
+   * Generuje statystyki użytkowników dla panelu administratora.
    */
-  async restoreUser(id: number) {
-    try {
-      return await this.prisma.user.update({
-        where: { id },
-        data: {
-          isActive: true,
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          username: true,
-          role: true,
-          isActive: true,
-        },
-      });
-    } catch (error: any) {
-      if (error.code === 'P2025') {
-        throw new NotFoundException('User not found');
-      }
-      throw error;
-    }
-  }
-
   async getAdminStats() {
     const totalUsers = await this.prisma.user.count();
     const activeUsers = await this.prisma.user.count({ where: { isActive: true } });

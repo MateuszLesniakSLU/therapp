@@ -31,8 +31,8 @@
           </template>
 
           <template v-slot:item.details="{ item }">
-            <div v-if="item.details" class="details-json">
-               <pre>{{ JSON.stringify(item.details, null, 2) }}</pre>
+            <div v-if="item.details">
+               <pre class="text-caption" style="white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(item.details, null, 2) }}</pre>
             </div>
           </template>
         </v-data-table>
@@ -42,7 +42,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watch, computed } from 'vue';
+import { defineComponent, ref, watch, computed, type PropType } from 'vue';
 import { authHeaders } from '../services/api';
 import { API_URL } from '../config';
 
@@ -57,7 +57,7 @@ export default defineComponent({
       required: true
     },
     userId: {
-      type: Number,
+      type: Number as PropType<number | null>,
       default: null
     },
     userName: {

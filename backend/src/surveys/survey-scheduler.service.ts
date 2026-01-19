@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SurveySchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SurveySchedulerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   onModuleInit() {
     //Utwórz ankietę o 00:00
@@ -34,13 +34,11 @@ export class SurveySchedulerService implements OnModuleInit {
     const title = `Ankieta dnia ${todayLabel}`;
 
     await this.prisma.$transaction(async (tx) => {
-      // Zamyka stare ankiety
       await tx.survey.updateMany({
         where: { active: true },
         data: { active: false },
       });
 
-      // Sprawdza czy ankieta istnieje, jeżeli tak to przerywa
       const exists = await tx.survey.findUnique({
         where: { date: surveyDate },
       });
@@ -52,7 +50,6 @@ export class SurveySchedulerService implements OnModuleInit {
         return;
       }
 
-      // 3️⃣ POBIERZ AKTYWNYCH PACJENTÓW
       const patients = await tx.user.findMany({
         where: {
           role: 'patient',
@@ -66,7 +63,6 @@ export class SurveySchedulerService implements OnModuleInit {
         return;
       }
 
-      // 4️⃣ UTWÓRZ NOWĄ ANKIETĘ (AKTYWNĄ)
       const survey = await tx.survey.create({
         data: {
           title,
@@ -77,7 +73,6 @@ export class SurveySchedulerService implements OnModuleInit {
         },
       });
 
-      // 5️⃣ STAŁY ZESTAW PYTAŃ
       const questions = [
         { text: 'Jak się dzisiaj czujesz?', type: 'rating' },
         { text: 'Jak minął dzień?', type: 'text' },
@@ -110,7 +105,6 @@ export class SurveySchedulerService implements OnModuleInit {
         }
       }
 
-      // 6️⃣ AUTO-PRZYPISANIE DO WSZYSTKICH PACJENTÓW
       await tx.surveyAssignment.createMany({
         data: patients.map((p) => ({
           surveyId: survey.id,

@@ -1,6 +1,10 @@
 import { authHeaders } from './api'
 import { API_URL } from '../config'
 
+/**
+ * Pobieranie danych użytkownika.
+ * (GET /users/me)
+ */
 export async function getMe() {
   const res = await fetch(`${API_URL}/users/me`, {
     headers: authHeaders(),
@@ -10,6 +14,10 @@ export async function getMe() {
   return res.json()
 }
 
+/**
+ * Aktualizacja danych użytkownika.
+ * (PATCH /users/me)
+ */
 export async function updateMe(data: {
   firstName: string
   lastName: string
@@ -25,6 +33,10 @@ export async function updateMe(data: {
   return res.json()
 }
 
+/**
+ * Zmiana hasła użytkownika.
+ * (PATCH /users/me/password)
+ */
 export async function changeMyPassword(data: {
   currentPassword: string
   newPassword: string

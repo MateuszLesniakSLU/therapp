@@ -3,12 +3,12 @@ import { API_URL } from '../config'
 
 export interface User {
     id: number
-    username: string
+    email: string
     role: 'patient' | 'therapist' | 'admin'
     isActive: boolean
     first_name?: string
     last_name?: string
-    email?: string
+    createdAt?: string
 }
 
 export async function getAllUsers(): Promise<User[]> {
