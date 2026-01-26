@@ -100,6 +100,15 @@
         :search="search"
         :loading="loading"
         hover
+        items-per-page-text="Elementów na stronę:"
+        :items-per-page-options="[
+          { value: 10, title: '10' },
+          { value: 25, title: '25' },
+          { value: 50, title: '50' },
+          { value: 100, title: '100' },
+          { value: -1, title: 'Wszystko' }
+        ]"
+        page-text="{0}-{1} z {2}"
       >
         <template v-slot:item.isActive="{ item }">
           <v-chip
@@ -193,7 +202,7 @@
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="grey" variant="text" @click="closeEditDialog">Anuluj</v-btn>
-          <v-btn color="primary" variant="text" @click="saveUser">Zapisz</v-btn>
+          <v-btn color="primary" variant="flat" @click="saveUser">Zapisz</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -210,7 +219,7 @@
           <v-btn color="grey" variant="text" @click="confirmDialog = false">Anuluj</v-btn>
           <v-btn
             :color="userToToggle?.isActive ? 'error' : 'success'"
-            variant="text"
+            variant="flat"
             @click="toggleActiveUser"
           >
             Potwierdź

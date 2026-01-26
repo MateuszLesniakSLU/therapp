@@ -52,23 +52,23 @@
       </v-col>
     </v-row>
 
-    <v-card class="mt-6 pa-4 rounded-xl" border elevation="0" v-if="stats && stats.responses.length > 0">
-       <div class="text-subtitle-1 font-weight-bold mb-4">Historia Samopoczucia</div>
-       <div style="height: 300px">
+    <v-card class="mt-4 pa-4 rounded-xl" border elevation="0" v-if="stats && stats.responses.length > 0">
+       <div class="text-subtitle-1 font-weight-bold mb-2">Historia Samopoczucia</div>
+       <div style="height: 220px">
           <MoodChart 
              :labels="stats.responses.map(r => formatDateShort(r.date))"
              :data="stats.responses.map(r => r.wellbeing)"
              gradient-start="rgba(25, 118, 210, 0.2)"
              border-color="#1976D2"
-             :height="300"
+             :height="220"
           />
        </div>
     </v-card>
 
-    <v-row class="mt-6" v-if="stats">
+    <v-row class="mt-4" v-if="stats">
       <v-col cols="12" md="8">
         <v-card title="Historia Samopoczucia">
-          <v-list lines="one" density="compact">
+          <v-list lines="one" density="compact" style="max-height: 300px; overflow-y: auto">
             <v-list-item 
               v-for="resp in (stats?.responses || [])" 
               :key="resp.date"
@@ -83,7 +83,7 @@
               <v-list-item-title>
                 {{ formatDate(resp.date) }} - Ocena: {{ resp.wellbeing }}
               </v-list-item-title>
-              <v-list-item-subtitle>
+              <v-list-item-subtitle v-if="resp.medication !== null">
                 Leki: {{ resp.medication ? 'Tak' : 'Nie' }}
               </v-list-item-subtitle>
               <template v-slot:append v-if="resp.surveyId">

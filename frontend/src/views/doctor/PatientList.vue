@@ -2,7 +2,7 @@
   <v-container>
     <div class="d-flex align-center justify-space-between mb-6">
       <h1>Moi Pacjenci</h1>
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="showAddDialog = true">
+      <v-btn color="primary" variant="flat" prepend-icon="mdi-plus" @click="showAddDialog = true">
         Dodaj Pacjenta
       </v-btn>
     </div>
@@ -40,7 +40,7 @@
         <v-card-title>Połącz z pacjentem</v-card-title>
         <v-card-text>
           <p class="mb-4 text-body-2">
-            Wpisz 6-cyfrowy kod wygenerowany przez pacjenta w jego panelu "Moi Doktorzy".
+            Wpisz 6-cyfrowy kod wygenerowany przez pacjenta w jego panelu "Moi Terapeuci".
           </p>
           <v-text-field
             v-model="connectCode"
@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, onUnmounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyPatients } from '../../services/therapist.service'
 import { requestConnection } from '../../services/connection.service'
@@ -82,6 +82,7 @@ import { requestConnection } from '../../services/connection.service'
 const patients = ref<any[]>([])
 const loading = ref(true)
 const router = useRouter()
+let pollInterval: any = null
 
 const showAddDialog = ref(false)
 const connectCode = ref('')
@@ -120,14 +121,24 @@ const connectPatient = async () => {
   }
 }
 
-onMounted(async () => {
+const fetchPatients = async (background = false) => {
+  if (!background) loading.value = true
   try {
     patients.value = await getMyPatients()
   } catch {
-    patients.value = []
+    if (!background) patients.value = []
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  fetchPatients()
+  pollInterval = setInterval(() => fetchPatients(true), 5000)
+})
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
 })
 </script>
 

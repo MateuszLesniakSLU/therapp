@@ -88,3 +88,90 @@ export async function getMyResponse(surveyId: number) {
   const text = await res.text()
   return text ? JSON.parse(text) : null
 }
+
+/**
+ * Tworzy nową ankietę (dla terapeuty).
+ * (POST /surveys)
+ */
+export async function createSurvey(data: {
+  title: string
+  description?: string
+  questions: any[]
+  patientIds?: number[]
+}) {
+  const res = await fetch(SURVEYS_URL, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || 'Nie udało się utworzyć ankiety')
+  }
+  return res.json()
+}
+
+/**
+ * Pobiera szczegóły ankiety dla terapeuty (statystyki + przypisani pacjenci).
+ * (GET /surveys/:id/details)
+ */
+export async function getSurveyDetails(id: number) {
+  const res = await fetch(`${SURVEYS_URL}/${id}/details`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Nie udało się pobrać szczegółów ankiety')
+  return res.json()
+}
+
+/**
+ * Aktualizuje przypisania ankiety (PUT /surveys/:id/assignments)
+ */
+export async function updateSurveyAssignments(surveyId: number, patientIds: number[]) {
+  const res = await fetch(`${SURVEYS_URL}/${surveyId}/assignments`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ patientIds }),
+  })
+  if (!res.ok) throw new Error('Nie udało się zaktualizować przypisań')
+  return res.json()
+}
+
+/**
+ * Usuwa ankietę (DELETE /surveys/:id)
+ */
+export async function deleteSurvey(id: number) {
+  const res = await fetch(`${SURVEYS_URL}/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Nie udało się usunąć ankiety')
+  return res.json()
+}
+
+/**
+ * Pobiera wszystkie ankiety (dla terapeuty, w tym nieaktywne).
+ * (GET /surveys/all)
+ */
+export async function getAllSurveys() {
+  const res = await fetch(`${SURVEYS_URL}/all`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Nie udało się pobrać ankiet')
+  return res.json()
+}
+
+/**
+ * Ustawia status ankiety (PATCH /surveys/:id/status)
+ */
+export async function setSurveyStatus(id: number, active: boolean) {
+  const res = await fetch(`${SURVEYS_URL}/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ active }),
+  })
+  if (!res.ok) throw new Error('Nie udało się zmienić statusu ankiety')
+  return res.json()
+}

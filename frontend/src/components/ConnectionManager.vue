@@ -11,6 +11,7 @@
         <div class="d-flex flex-column align-center justify-center text-center">
           <v-btn
             color="primary"
+            variant="flat"
             size="large"
             @click="generateNewCode"
             :loading="loadingCode"
@@ -100,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { generateCode, getMyConnections, acceptConnection, deleteConnection, type Connection } from '../services/connection.service'
 
 const props = defineProps<{
@@ -112,6 +113,7 @@ const expires = ref('')
 const loadingCode = ref(false)
 const loadingList = ref(false)
 const connections = ref<Connection[]>([])
+let pollInterval: any = null
 
 const generateNewCode = async () => {
   loadingCode.value = true
@@ -126,8 +128,8 @@ const generateNewCode = async () => {
   }
 }
 
-const fetchConnections = async () => {
-  loadingList.value = true
+const fetchConnections = async (background = false) => {
+  if (!background) loadingList.value = true
   try {
     connections.value = await getMyConnections()
   } catch (e) {
@@ -140,7 +142,7 @@ const fetchConnections = async () => {
 const accept = async (id: number) => {
   try {
     await acceptConnection(id)
-    await fetchConnections()
+    await fetchConnections(true)
   } catch (e) {
     console.error(e)
   }
@@ -150,7 +152,7 @@ const remove = async (id: number) => {
   if (!confirm('Czy na pewno chcesz usunąć to połączenie?')) return
   try {
     await deleteConnection(id)
-    await fetchConnections()
+    await fetchConnections(true)
   } catch (e) {
     console.error(e)
   }
@@ -158,5 +160,10 @@ const remove = async (id: number) => {
 
 onMounted(() => {
   fetchConnections()
+  pollInterval = setInterval(() => fetchConnections(true), 5000)
+})
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
 })
 </script>

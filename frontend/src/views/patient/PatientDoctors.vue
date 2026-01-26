@@ -1,6 +1,6 @@
 <template>
   <v-container>
-    <h1 class="mb-6">Moi Doktorzy</h1>
+    <h1 class="mb-6">Moi Terapeuci</h1>
     <ConnectionManager role="patient" />
   </v-container>
 </template>

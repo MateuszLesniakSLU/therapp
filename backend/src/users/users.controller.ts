@@ -18,6 +18,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { Role } from '../auth/role.enum';
 
 /**
  * Kontroler obsługujący użytkowników.
@@ -32,7 +33,7 @@ export class UsersController {
    * Pobiera listę użytkowników.
    */
   @Get()
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   findAll() {
     return this.usersService.findAllUsers();
   }
@@ -42,7 +43,7 @@ export class UsersController {
    * ID użytkownika jest pobierane z tokenu JWT.
    */
   @Get('me')
-  @Roles('patient', 'admin', 'therapist')
+  @Roles(Role.PATIENT, Role.ADMIN, Role.THERAPIST)
   async getMe(@Request() req: any) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
@@ -54,7 +55,7 @@ export class UsersController {
    * Aktualizacja własnego profilu.
    */
   @Patch('me')
-  @Roles('patient', 'admin', 'therapist')
+  @Roles(Role.PATIENT, Role.ADMIN, Role.THERAPIST)
   async updateMe(@Request() req: any, @Body() body: UpdateUserDto) {
     const rawId = req?.user?.userId;
     const id = Number(rawId);
@@ -67,7 +68,7 @@ export class UsersController {
    * Pobranie dowolnego użytkownika po ID.
    */
   @Get(':id')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findUserById(id);
   }
@@ -76,7 +77,7 @@ export class UsersController {
    * Stworzenie nowego użytkownika ręcznie.
    */
   @Post()
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   create(@Body() dto: CreateUserDto) {
     return this.usersService.createUser(dto.email, dto.password, dto.role);
   }
@@ -85,7 +86,7 @@ export class UsersController {
    * Edycja dowolnego użytkownika.
    */
   @Patch(':id')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
@@ -97,7 +98,7 @@ export class UsersController {
    * Zmiana własnego hasła.
    */
   @Patch('me/password')
-  @Roles('patient', 'admin', 'therapist')
+  @Roles(Role.PATIENT, Role.ADMIN, Role.THERAPIST)
   async changeMyPassword(
     @Request() req: any,
     @Body() dto: ChangePasswordDto,
@@ -115,7 +116,7 @@ export class UsersController {
    * Zmiana hasła innemu użytkownikowi (reset).
    */
   @Patch(':id/password')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   changePassword(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ChangePasswordDto,
@@ -131,7 +132,7 @@ export class UsersController {
    * Dezaktywacja konta użytkownika.
    */
   @Delete(':id')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.softDeleteUser(id);
   }
@@ -140,7 +141,7 @@ export class UsersController {
    * Przywrócenie konta użytkownika.
    */
   @Patch(':id/restore')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   restore(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.restoreUser(id);
   }
@@ -149,7 +150,7 @@ export class UsersController {
    * Pobranie statystyk dla admina.
    */
   @Get('stats/dashboard')
-  @Roles('admin')
+  @Roles(Role.ADMIN)
   getStats() {
     return this.usersService.getAdminStats();
   }

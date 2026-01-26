@@ -26,24 +26,27 @@
       </v-row>
 
       <v-row>
-        <v-col cols="12" md="6">
-          <v-card color="primary" variant="tonal" class="pa-4">
+        <v-col cols="12" :md="booleanAnswers.length > 0 ? 6 : 12">
+          <v-card color="primary" variant="tonal" class="pa-4 h-100">
             <div class="text-h6 mb-2">Samopoczucie</div>
             <div class="text-h3 font-weight-bold">
               {{ response.wellbeingRating ?? '-' }}/10
             </div>
           </v-card>
         </v-col>
-        <v-col cols="12" md="6">
-          <v-card :color="response.tookMedication ? 'success' : 'warning'" variant="tonal" class="pa-4">
-            <div class="text-h6 mb-2">Leki</div>
-            <div class="text-h3 font-weight-bold d-flex align-center">
-              <v-icon size="40" class="mr-2">
-                {{ response.tookMedication ? 'mdi-check-circle' : 'mdi-close-circle' }}
-              </v-icon>
-              {{ response.tookMedication ? 'Przyjęte' : 'Nie przyjęte' }}
-            </div>
-          </v-card>
+        <v-col cols="12" md="6" v-if="booleanAnswers.length > 0">
+           <v-card v-for="boolAns in booleanAnswers" :key="boolAns.id" :color="boolAns.answerText === 'Tak' ? 'success' : 'warning'" variant="tonal" class="pa-4 mb-2">
+             <div class="text-subtitle-2 mb-1 d-flex align-center">
+               <v-icon size="small" class="mr-1">{{ getQuestionIcon(boolAns.question?.questionText) }}</v-icon>
+               {{ boolAns.question?.questionText }}
+             </div>
+             <div class="text-h5 font-weight-bold d-flex align-center">
+               <v-icon size="32" class="mr-2">
+                 {{ boolAns.answerText === 'Tak' ? 'mdi-check-circle' : 'mdi-close-circle' }}
+               </v-icon>
+               {{ boolAns.answerText }}
+             </div>
+           </v-card>
         </v-col>
       </v-row>
 
@@ -51,7 +54,7 @@
         <v-col cols="12">
           <v-card title="Szczegóły odpowiedzi" class="pb-10">
             <v-list>
-              <v-list-item v-for="answer in response.answers" :key="answer.id" lines="two">
+              <v-list-item v-for="answer in otherAnswers" :key="answer.id" lines="two">
                 <v-list-item-title class="font-weight-bold">
                   {{ answer.question?.questionText }}
                 </v-list-item-title>
@@ -72,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authHeaders } from '../../services/api'
 import { API_URL } from '../../config'
@@ -86,6 +89,30 @@ const surveyId = Number(route.params.surveyId)
 const response = ref<any>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+const getQuestionIcon = (text: string = '') => {
+  const lower = text.toLowerCase()
+  if (lower.includes('lek') || lower.includes('med')) return 'mdi-pill'
+  if (lower.includes('sen') || lower.includes('spa') || lower.includes('noc')) return 'mdi-bed'
+  if (lower.includes('jedz') || lower.includes('apetyt')) return 'mdi-food'
+  return 'mdi-help-circle-outline'
+}
+
+const booleanAnswers = computed(() => {
+   if (!response.value) return []
+   return response.value.answers?.filter((a: any) => {
+     const text = (a.answerText || '').toLowerCase()
+     return text === 'tak' || text === 'nie'
+   }) || []
+})
+
+const otherAnswers = computed(() => {
+   if (!response.value) return []
+   return response.value.answers?.filter((a: any) => {
+     const text = (a.answerText || '').toLowerCase()
+     return text !== 'tak' && text !== 'nie'
+   }) || []
+})
 
 const goBack = () => {
   router.push(`/doctor/patients/${patientId}`)

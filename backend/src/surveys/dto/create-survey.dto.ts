@@ -46,4 +46,9 @@ export class CreateSurveyDto {
   @ValidateNested({ each: true })
   @Type(() => CreateSurveyQuestionDto)
   questions?: CreateSurveyQuestionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  patientIds?: number[];
 }

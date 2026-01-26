@@ -3,6 +3,7 @@ import { ActivityLogsService } from './activity-logs.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { Role } from '../auth/role.enum';
 
 @Controller('logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -10,7 +11,7 @@ export class ActivityLogsController {
     constructor(private readonly logsService: ActivityLogsService) { }
 
     @Get('user/:userId')
-    @Roles('admin')
+    @Roles(Role.ADMIN)
     async getUserLogs(
         @Param('userId', ParseIntPipe) userId: number,
         @Query('limit') limit = '50',

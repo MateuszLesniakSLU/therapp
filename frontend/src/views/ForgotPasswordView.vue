@@ -25,6 +25,7 @@
             <v-btn
               type="submit"
               color="primary"
+              variant="flat"
               block
               :loading="loading"
               class="mt-4"

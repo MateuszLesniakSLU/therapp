@@ -39,7 +39,7 @@ export class SurveySchedulerService implements OnModuleInit {
         data: { active: false },
       });
 
-      const exists = await tx.survey.findUnique({
+      const exists = await tx.survey.findFirst({
         where: { date: surveyDate },
       });
 

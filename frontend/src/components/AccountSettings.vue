@@ -34,6 +34,7 @@
 
           <v-btn
             color="primary"
+            variant="flat"
             type="submit"
             :loading="loadingProfile"
           >
@@ -71,6 +72,7 @@
 
           <v-btn
             color="primary"
+            variant="flat"
             type="submit"
             :loading="loadingPassword"
           >

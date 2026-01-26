@@ -12,8 +12,5 @@ import SidebarDoctor from '../components/sidebars/SidebarDoctor.vue'
 </script>
 
 <style scoped>
-.main-content {
-  height: 100vh;
-  overflow-y: auto;
-}
+/* Usunięto style wymuszające scrollbar */
 </style>

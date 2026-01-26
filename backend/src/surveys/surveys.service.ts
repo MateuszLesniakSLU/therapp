@@ -67,6 +67,17 @@ export class SurveysService {
           }
         }
       }
+
+      // Przypisz ankietę do pacjentów jeśli podano
+      if (dto.patientIds && dto.patientIds.length > 0) {
+        await tx.surveyAssignment.createMany({
+          data: dto.patientIds.map(userId => ({
+            surveyId: survey.id,
+            userId,
+          })),
+        });
+      }
+
       return survey;
     });
   }
@@ -79,9 +90,39 @@ export class SurveysService {
       where: {
         active: true,
       },
+      include: {
+        questions: true,
+      },
       orderBy: {
         createdAt: 'desc',
       },
+    });
+  }
+
+  /**
+   * Pobiera listę wszystkich ankiet (dla terapeuty).
+   */
+  async listAllSurveys(): Promise<any[]> {
+    return this.prisma.survey.findMany({
+      where: {
+        deleted: false
+      },
+      include: {
+        questions: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Ustawia status aktywności ankiety.
+   */
+  async setSurveyStatus(id: number, active: boolean) {
+    return this.prisma.survey.update({
+      where: { id },
+      data: { active }
     });
   }
 
@@ -395,18 +436,6 @@ export class SurveysService {
    * Szuka zarówno poprzez tabelę połączeń (PatientTherapist) jak i przez przypisane ankiety (SurveyAssignment).
    */
   async getTherapistPatients(therapistId: number) {
-    const surveyAssignments = await this.prisma.surveyAssignment.findMany({
-      where: {
-        survey: {
-          createdById: therapistId
-        }
-      },
-      select: { userId: true },
-      distinct: ['userId']
-    });
-
-    const surveyPatientIds = surveyAssignments.map(a => a.userId);
-
     const connections = await this.prisma.patientTherapist.findMany({
       where: {
         therapistId,
@@ -417,10 +446,8 @@ export class SurveysService {
 
     const connectionPatientIds = connections.map(c => c.patientId);
 
-    const allPatientIds = Array.from(new Set([...surveyPatientIds, ...connectionPatientIds]));
-
     return this.prisma.user.findMany({
-      where: { id: { in: allPatientIds } },
+      where: { id: { in: connectionPatientIds } },
       select: {
         id: true,
         email: true,
@@ -436,7 +463,20 @@ export class SurveysService {
    * Generuje statystyki pacjenta dla wykresów w panelu terapeuty.
    * Oblicza średnie samopoczucie, ilość odpowiedzi i luki w wypełnianiu ankiet.
    */
-  async getPatientStats(patientId: number, days: number) {
+  async getPatientStats(therapistId: number, patientId: number, days: number) {
+    const connection = await this.prisma.patientTherapist.findUnique({
+      where: {
+        patientId_therapistId: {
+          patientId,
+          therapistId
+        }
+      }
+    });
+
+    if (!connection || connection.status !== 'ACTIVE') {
+      throw new ForbiddenException('Brak aktywnego połączenia z pacjentem');
+    }
+
     const endDate = new Date();
     let startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
@@ -590,6 +630,140 @@ export class SurveysService {
       lowWellbeing: lowWellbeingPatients,
       missingSurveys: missingSurveyPatients,
       totalPatients: patients.length
+    };
+  }
+
+  /**
+   * Aktualizuje listę przypisanych pacjentów (synchronizacja).
+   * Usuwa nieobecnych, dodaje nowych.
+   */
+  async updateSurveyAssignments(surveyId: number, patientIds: number[]) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Znajdź usuwanych użytkowników
+      const assignmentsToDelete = await tx.surveyAssignment.findMany({
+        where: {
+          surveyId,
+          userId: { notIn: patientIds }
+        },
+        select: { userId: true }
+      });
+
+      const userIdsToDelete = assignmentsToDelete.map(a => a.userId);
+
+      if (userIdsToDelete.length > 0) {
+        // Usuń dzisiejsze odpowiedzi usuwanych użytkowników (żeby nie psuły statystyk)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        await tx.surveyResponse.deleteMany({
+          where: {
+            surveyId,
+            userId: { in: userIdsToDelete },
+            updatedAt: { gte: today }
+          }
+        });
+
+        // Usuń przypisania
+        await tx.surveyAssignment.deleteMany({
+          where: {
+            surveyId,
+            userId: { in: userIdsToDelete }
+          }
+        });
+      }
+
+      // 2. Znajdź istniejące przypisania spośród nowej listy (żeby nie dodawać duplikatów)
+      const existing = await tx.surveyAssignment.findMany({
+        where: {
+          surveyId,
+          userId: { in: patientIds }
+        },
+        select: { userId: true }
+      });
+
+      const existingIds = new Set(existing.map(e => e.userId));
+      const toCreate = patientIds.filter(id => !existingIds.has(id));
+
+      // 3. Dodaj brakujące
+      if (toCreate.length > 0) {
+        await tx.surveyAssignment.createMany({
+          data: toCreate.map(userId => ({
+            surveyId,
+            userId,
+          }))
+        });
+      }
+      return { added: toCreate.length };
+    });
+  }
+
+  /**
+   * Usuwa ankietę (dezaktywuje ją).
+   */
+  async deleteSurvey(id: number) {
+    return this.prisma.survey.update({
+      where: { id },
+      data: { active: false }
+    });
+  }
+
+  /**
+   * Pobiera szczegóły ankiety dla terapeuty (statystyki + przypisani pacjenci).
+   */
+  async getSurveyDetailsForTherapist(surveyId: number) {
+    const survey = await this.prisma.survey.findUnique({
+      where: { id: surveyId },
+      include: {
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!survey) throw new NotFoundException('Ankieta nie znaleziona');
+
+    // Sprawdź kto wypełnił dzisiaj
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayResponses = await this.prisma.surveyResponse.findMany({
+      where: {
+        surveyId,
+        updatedAt: { gte: today }
+      },
+      select: {
+        id: true,
+        userId: true,
+        wellbeingRating: true,
+        updatedAt: true
+      }
+    });
+
+    const patientStats = survey.assignments.map(assignment => {
+      const response = todayResponses.find(r => r.userId === assignment.userId);
+      return {
+        user: assignment.user,
+        hasCompletedToday: !!response,
+        responseId: response?.id,
+        wellbeing: response?.wellbeingRating,
+        completedAt: response?.updatedAt
+      };
+    });
+
+    return {
+      survey,
+      patientStats,
+      todayCount: todayResponses.length,
+      totalAssigned: survey.assignments.length
     };
   }
 }

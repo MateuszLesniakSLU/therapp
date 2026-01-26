@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 /**
  * Serwis zarządzający użytkownikami.
@@ -8,7 +10,10 @@ import * as bcrypt from 'bcrypt';
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) { }
 
   /**
    * Pobiera wszystkich użytkowników z bazy.
@@ -168,15 +173,23 @@ export class UsersService {
 
   /**
    * "Soft delete" - nie usuwa rekordu fizycznie, tylko oznacza jako nieaktywny.
-   * Pozwala to na zachowanie historii danych.
+   * Resetuje weryfikację email - użytkownik musi ponownie potwierdzić konto po reaktywacji.
    */
   async softDeleteUser(id: number) {
     try {
-      return await this.prisma.user.update({
+      // Generowanie nowego tokenu weryfikacyjnego
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date();
+      verificationTokenExpires.setHours(verificationTokenExpires.getHours() + 24);
+
+      const user = await this.prisma.user.update({
         where: { id },
         data: {
           isActive: false,
           deletedAt: new Date(),
+          isVerified: false,
+          verificationToken,
+          verificationTokenExpires,
         },
         select: {
           id: true,
@@ -185,6 +198,11 @@ export class UsersService {
           isActive: true,
         },
       });
+
+      // Wysłanie emaila z informacją o konieczności reaktywacji
+      await this.emailService.sendReactivationEmail(user.email, verificationToken);
+
+      return user;
     } catch (error: any) {
       if (error.code === 'P2025') {
         throw new NotFoundException('Użytkownik nie znaleziony');

@@ -64,4 +64,26 @@ export class EmailService implements OnModuleInit {
       `,
         });
     }
+
+    /**
+     * Wysyła email z linkiem do ponownej aktywacji konta.
+     * Używane gdy administrator dezaktywuje konto użytkownika.
+     */
+    async sendReactivationEmail(email: string, token: string) {
+        const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
+
+        await this.transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@therapp.local',
+            to: email,
+            subject: 'Twoje konto zostało dezaktywowane - TherApp',
+            html: `
+        <h1>Twoje konto zostało dezaktywowane</h1>
+        <p>Administrator dezaktywował Twoje konto w systemie TherApp.</p>
+        <p>Jeśli chcesz ponownie korzystać z aplikacji, musisz najpierw poczekać na reaktywację konta przez administratora, a następnie kliknąć poniższy link aby potwierdzić swój adres email:</p>
+        <a href="${verifyUrl}">${verifyUrl}</a>
+        <p>Link wygasa za 24 godziny.</p>
+        <p>Jeśli masz pytania, skontaktuj się z administratorem.</p>
+      `,
+        });
+    }
 }

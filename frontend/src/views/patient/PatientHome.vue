@@ -67,40 +67,30 @@
                 :height="200"
               />
            </div>
-        </v-card>
-
-      </v-col>
+        </v-card>      </v-col>
 
       <v-col cols="12" md="4">
         <v-card title="Szybkie akcje" class="mb-6 rounded-xl" elevation="0" border>
           <v-list>
             <v-list-item
-              to="/patient/history"
-              prepend-icon="mdi-history"
-              title="Twoja historia"
-              subtitle="Zobacz poprzednie ankiety"
+              to="/patient/surveys"
+              prepend-icon="mdi-clipboard-list"
+              title="Wszystkie ankiety"
+              subtitle="Wypełnij lub zobacz historię"
               rounded="lg"
               class="mb-2"
             ></v-list-item>
              <v-list-item
               to="/patient/doctors"
               prepend-icon="mdi-doctor"
-              title="Moi specjaliści"
+              title="Moi terapeuci"
               subtitle="Zarządzaj połączeniami"
               rounded="lg"
             ></v-list-item>
           </v-list>
         </v-card>
 
-        <v-card class="pa-6 quote-card rounded-xl" elevation="2">
-            <v-icon icon="mdi-format-quote-open" size="48" color="primary" class="mb-2 opacity-50"></v-icon>
-            <blockquote class="text-h6 font-italic font-weight-light mb-4 text-center">
-              "{{ quote?.text }}"
-            </blockquote>
-            <div class="text-right text-subtitle-2 font-weight-bold text-medium-emphasis">
-              — {{ quote?.author }}
-            </div>
-        </v-card>
+
       </v-col>
     </v-row>
   </v-container>
@@ -121,15 +111,7 @@ const loading = ref(true)
 const chartLabels = ref<string[]>([])
 const chartData = ref<number[]>([])
 
-const quotes = [
-  { text: "Każdy dzień to nowa szansa, aby zmienić swoje życie.", author: "Nieznany" },
-  { text: "Nie musisz być wielki, aby zacząć, ale musisz zacząć, aby być wielkim.", author: "Zig Ziglar" },
-  { text: "Twoje zdrowie psychiczne jest priorytetem. Twoje szczęście jest ważne. Twoja dbałość o siebie jest koniecznością.", author: "Nieznany" },
-  { text: "Bądź zmianą, którą chcesz ujrzeć w świecie.", author: "Mahatma Gandhi" },
-  { text: "Najlepszym sposobem na przewidzenie przyszłości jest jej kreowanie.", author: "Peter Drucker" }
-];
 
-const quote = ref(quotes[Math.floor(Math.random() * quotes.length)]);
 
 const checkSurveyStatus = async () => {
   try {
@@ -164,8 +146,4 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.quote-card {
-    border-left: 4px solid #1976D2;
-}
-</style>
+

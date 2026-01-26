@@ -46,6 +46,7 @@ model Survey {
   date        DateTime 
   createdAt   DateTime  @default(now())
   active      Boolean   @default(true)
+  deleted     Boolean   @default(false)
 
   createdById Int
   createdBy   User      @relation("SurveyCreator", fields: [createdById], references: [id])
@@ -53,8 +54,6 @@ model Survey {
   questions   SurveyQuestion[]
   assignments SurveyAssignment[]
   responses   SurveyResponse[]
-
-  @@unique([date])
 }
 
 model SurveyQuestion {

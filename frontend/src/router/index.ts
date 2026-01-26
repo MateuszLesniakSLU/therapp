@@ -44,9 +44,7 @@ export const router = createRouter({
         { path: 'surveys', component: () => import('../views/patient/PatientSurveys.vue') },
         { path: 'surveys/:id', component: () => import('../views/patient/PatientSurveyFill.vue') },
         { path: 'doctors', component: () => import('../views/patient/PatientDoctors.vue') },
-        { path: 'history', component: () => import('../views/patient/SurveyHistory.vue') },
-
-
+        { path: 'history', redirect: '/patient/surveys' },
         { path: 'settings', component: () => import('../views/patient/PatientSettings.vue') },
       ],
     },
@@ -60,6 +58,9 @@ export const router = createRouter({
         { path: 'patients', component: () => import('../views/doctor/PatientList.vue') },
         { path: 'patients/:patientId', component: () => import('../views/doctor/PatientDetails.vue') },
         { path: 'patients/:patientId/survey/:surveyId', component: () => import('../views/doctor/PatientSurveyResponse.vue') },
+        { path: 'surveys', component: () => import('../views/doctor/DoctorSurveys.vue') },
+        { path: 'surveys/new', component: () => import('../views/doctor/DoctorSurveyCreate.vue') },
+        { path: 'surveys/:id', component: () => import('../views/doctor/DoctorSurveyDetails.vue') },
         { path: 'settings', component: () => import('../views/doctor/DoctorSettings.vue') },
       ],
     },
