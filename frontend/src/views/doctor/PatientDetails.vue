@@ -6,7 +6,7 @@
     </div>
 
     <div class="mb-4">
-      <v-btn-toggle v-model="days" mandatory color="primary" @update:model-value="fetchStats">
+      <v-btn-toggle v-model="days" mandatory color="primary" @update:model-value="() => fetchStats()">
         <v-btn :value="7">7 Dni</v-btn>
         <v-btn :value="14">14 Dni</v-btn>
         <v-btn :value="30">30 Dni</v-btn>
@@ -21,7 +21,7 @@
                 <v-avatar color="primary-lighten-4" class="mr-3" rounded="lg"><v-icon color="primary">mdi-clipboard-list</v-icon></v-avatar>
                 <div>
                    <div class="text-caption font-weight-bold text-medium-emphasis">WYPEŁNIONE ANKIETY</div>
-                   <div class="text-h5 font-weight-black">{{ stats.total }} / {{ stats.period }}</div>
+                   <div class="text-h5 font-weight-black">{{ stats.total }} / {{ stats.assignedSurveysCount }}</div>
                 </div>
              </div>
         </v-card>
@@ -81,7 +81,7 @@
                 </v-icon>
               </template>
               <v-list-item-title>
-                {{ formatDate(resp.date) }} - Ocena: {{ resp.wellbeing }}
+                {{ formatDate(resp.date) }}<template v-if="resp.wellbeing !== null && resp.wellbeing !== undefined"> - Ocena: {{ resp.wellbeing }}</template>
               </v-list-item-title>
               <v-list-item-subtitle v-if="resp.medication !== null">
                 Leki: {{ resp.medication ? 'Tak' : 'Nie' }}
@@ -112,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPatientStats, type PatientStats } from '../../services/therapist.service'
 import MoodChart from '../../components/MoodChart.vue'
@@ -122,17 +122,18 @@ const router = useRouter()
 const stats = ref<PatientStats | null>(null)
 const days = ref(30)
 const loading = ref(false)
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const patientId = computed(() => Number(route.params.patientId))
 
 const completionRate = computed(() => {
   if (!stats.value) return 0
-  if (stats.value.period === 0) return 0
-  return (stats.value.total / stats.value.period) * 100
+  if (stats.value.assignedSurveysCount === 0) return 0
+  return (stats.value.total / stats.value.assignedSurveysCount) * 100
 })
 
-const fetchStats = async () => {
-  loading.value = true
+const fetchStats = async (background = false) => {
+  if (!background) loading.value = true
   try {
     stats.value = await getPatientStats(patientId.value, days.value)
   } catch {
@@ -158,5 +159,10 @@ const viewSurveyResponse = (surveyId: number) => {
 
 onMounted(() => {
   fetchStats()
+  pollInterval = setInterval(() => fetchStats(true), 5000)
+})
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
 })
 </script>

@@ -137,12 +137,12 @@
                       </span>
                     </div>
                     <v-chip 
-                      :color="boolAns.answerText === 'Tak' ? 'success' : 'error'" 
+                      :color="boolAns.answerText?.toLowerCase() === 'tak' ? 'success' : 'error'" 
                       size="small"
                       variant="flat"
                     >
                       <v-icon size="small" class="mr-1">
-                        {{ boolAns.answerText === 'Tak' ? 'mdi-check' : 'mdi-close' }}
+                        {{ boolAns.answerText?.toLowerCase() === 'tak' ? 'mdi-check' : 'mdi-close' }}
                       </v-icon>
                       {{ boolAns.answerText }}
                     </v-chip>
@@ -208,7 +208,7 @@ const surveys = ref<Survey[]>([])
 const responses = ref<SurveyResponse[]>([])
 const loading = ref(true)
 const statusMap = ref<Record<number, Date>>({})
-let pollInterval: any = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 /* ---------- lifecycle ---------- */
 

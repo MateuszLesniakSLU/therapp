@@ -53,6 +53,9 @@
               >
                 {{ survey.active ? 'Dezaktywuj' : 'Aktywuj' }}
               </v-btn>
+              <v-btn variant="flat" color="secondary" size="small" :to="`/doctor/surveys/${survey.id}/edit`">
+                Edytuj
+              </v-btn>
               <v-btn variant="flat" color="primary" size="small" :to="`/doctor/surveys/${survey.id}`">
                 Szczegóły
               </v-btn>
@@ -107,7 +110,7 @@ import { getAllSurveys, setSurveyStatus, deleteSurvey } from '../../services/sur
 
 const surveys = ref<any[]>([])
 const loading = ref(true)
-let pollInterval: any = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const statusDialog = reactive({
   show: false,

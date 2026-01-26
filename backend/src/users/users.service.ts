@@ -177,7 +177,6 @@ export class UsersService {
    */
   async softDeleteUser(id: number) {
     try {
-      // Generowanie nowego tokenu weryfikacyjnego
       const verificationToken = crypto.randomBytes(32).toString('hex');
       const verificationTokenExpires = new Date();
       verificationTokenExpires.setHours(verificationTokenExpires.getHours() + 24);
@@ -199,7 +198,6 @@ export class UsersService {
         },
       });
 
-      // Wysłanie emaila z informacją o konieczności reaktywacji
       await this.emailService.sendReactivationEmail(user.email, verificationToken);
 
       return user;

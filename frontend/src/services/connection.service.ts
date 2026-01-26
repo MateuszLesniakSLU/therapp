@@ -21,6 +21,10 @@ export interface Connection {
     }
 }
 
+/**
+ * Generuje kod połączenia (6-cyfrowy) dla pacjenta.
+ * (POST /connections/generate-code)
+ */
 export async function generateCode() {
     const res = await fetch(`${API_URL}/connections/generate-code`, {
         method: 'POST',
@@ -30,6 +34,10 @@ export async function generateCode() {
     return res.json()
 }
 
+/**
+ * Wysyła prośbę o połączenie do pacjenta via kod.
+ * (POST /connections/request)
+ */
 export async function requestConnection(code: string) {
     const res = await fetch(`${API_URL}/connections/request`, {
         method: 'POST',
@@ -46,6 +54,10 @@ export async function requestConnection(code: string) {
     return res.json()
 }
 
+/**
+ * Pobiera listę połączeń dla zalogowanego użytkownika.
+ * (GET /connections)
+ */
 export async function getMyConnections() {
     const res = await fetch(`${API_URL}/connections`, {
         headers: authHeaders(),
@@ -54,6 +66,10 @@ export async function getMyConnections() {
     return res.json()
 }
 
+/**
+ * Akceptuje prośbę o połączenie.
+ * (PATCH /connections/:id/accept)
+ */
 export async function acceptConnection(id: number) {
     const res = await fetch(`${API_URL}/connections/${id}/accept`, {
         method: 'PATCH',
@@ -63,6 +79,10 @@ export async function acceptConnection(id: number) {
     return res.json()
 }
 
+/**
+ * Usuwa połączenie.
+ * (DELETE /connections/:id)
+ */
 export async function deleteConnection(id: number) {
     const res = await fetch(`${API_URL}/connections/${id}`, {
         method: 'DELETE',

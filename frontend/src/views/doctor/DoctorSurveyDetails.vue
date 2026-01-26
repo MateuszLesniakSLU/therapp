@@ -8,6 +8,9 @@
            <h1 class="text-h4">{{ survey?.title }}</h1>
         </div>
       </div>
+      <v-btn v-if="survey" color="primary" variant="flat" prepend-icon="mdi-pencil" :to="`/doctor/surveys/${surveyId}/edit`">
+        Edytuj ankietę
+      </v-btn>
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
@@ -45,7 +48,7 @@
       <!-- Tabela pacjentów -->
       <v-card title="Przypisani Pacjenci">
         <template v-slot:append>
-          <v-btn color="primary" variant="text" prepend-icon="mdi-pencil" @click="openAssignmentDialog">
+          <v-btn color="primary" variant="flat" prepend-icon="mdi-account-edit" @click="openAssignmentDialog">
             Edytuj przypisania
           </v-btn>
         </template>

@@ -1,13 +1,17 @@
 <template>
   <v-container>
     <div class="d-flex align-center mb-6">
-      <v-btn icon="mdi-arrow-left" variant="text" to="/doctor/surveys" class="mr-4"></v-btn>
-      <h1 class="text-h4">Nowa Ankieta</h1>
+      <v-btn icon="mdi-arrow-left" variant="text" :to="`/doctor/surveys/${surveyId}`" class="mr-4"></v-btn>
+      <h1 class="text-h4">Edytuj Ankietę</h1>
     </div>
 
-    <v-form ref="form" @submit.prevent="submitSurvey">
+    <v-progress-circular v-if="loadingSurvey" indeterminate color="primary"></v-progress-circular>
+
+    <v-alert v-if="loadError" type="error" class="mb-4">{{ loadError }}</v-alert>
+
+    <v-form v-if="!loadingSurvey && !loadError" ref="form" @submit.prevent="submitSurvey">
       <v-row>
-        <!-- LEWA KOLUMNA: Szcegóły ankiety i pytania -->
+        <!-- LEWA KOLUMNA: Szczegóły ankiety i pytania -->
         <v-col cols="12" md="8">
           <v-card class="mb-6 rounded-lg pa-4">
             <v-card-title>Szczegóły Ankiety</v-card-title>
@@ -105,51 +109,15 @@
 
         </v-col>
 
-        <!-- PRAWA KOLUMNA: Pacjenci -->
+        <!-- PRAWA KOLUMNA: Przyciski zapisu -->
         <v-col cols="12" md="4">
           <v-card class="rounded-lg pa-4 position-sticky" style="top: 20px">
-            <v-card-title>Przypisz do pacjentów</v-card-title>
+            <v-card-title>Zapisz zmiany</v-card-title>
             <v-card-text>
-              <v-text-field
-                v-model="searchPatient"
-                label="Szukaj pacjenta"
-                prepend-inner-icon="mdi-magnify"
-                variant="outlined"
-                density="compact"
-                hide-details
-                class="mb-4"
-              ></v-text-field>
-
-              <div v-if="loadingPatients" class="text-center py-4">
-                <v-progress-circular indeterminate color="primary"></v-progress-circular>
-              </div>
-              <div v-else>
-                 <v-checkbox
-                    v-model="selectAll"
-                    label="Zaznacz wszystkich (widocznych)"
-                    @update:model-value="toggleAllPatients"
-                    hide-details
-                    class="mb-2 font-weight-bold"
-                 ></v-checkbox>
-                 <v-divider class="mb-2"></v-divider>
-                 
-                 <div style="max-height: 400px; overflow-y: auto">
-                    <v-checkbox
-                      v-for="patient in filteredPatients"
-                      :key="patient.id"
-                      v-model="selectedPatients"
-                      :label="getPatientLabel(patient)"
-                      :value="patient.id"
-                      density="compact"
-                      hide-details
-                    ></v-checkbox>
-                 </div>
-                 <div v-if="filteredPatients.length === 0" class="text-caption text-grey mt-2">
-                   Brak pacjentów spełniających kryteria.
-                 </div>
-              </div>
+              <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+                Uwaga: Edycja pytań nie wpływa na już złożone odpowiedzi pacjentów.
+              </v-alert>
             </v-card-text>
-            <v-divider></v-divider>
             <v-card-actions class="pa-4">
               <v-btn
                 block
@@ -160,7 +128,7 @@
                 :loading="submitting"
                 :disabled="survey.questions.length === 0"
               >
-                Utwórz Ankietę
+                Zapisz Ankietę
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -175,12 +143,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { createSurvey } from '../../services/survey.service'
-import { getMyPatients } from '../../services/therapist.service'
+import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getSurveyById, updateSurvey } from '../../services/survey.service'
 
+const route = useRoute()
 const router = useRouter()
+const surveyId = Number(route.params.id)
 
 /* ---------- Stan ---------- */
 
@@ -188,7 +157,7 @@ interface Question {
   text: string
   type: 'text' | 'rating' | 'choice' | 'number'
   required: boolean
-  options: string[] // Używane tylko dla choice
+  options: string[]
 }
 
 const survey = reactive({
@@ -197,33 +166,36 @@ const survey = reactive({
   questions: [] as Question[]
 })
 
-const patients = ref<any[]>([])
-const selectedPatients = ref<number[]>([])
-const selectAll = ref(false)
-const searchPatient = ref('')
-
-const loadingPatients = ref(false)
+const loadingSurvey = ref(true)
+const loadError = ref<string | null>(null)
 const submitting = ref(false)
 const snackbar = reactive({ show: false, text: '', color: 'success' })
 
-/* ---------- Computed ---------- */
+/* ---------- Ładowanie danych ---------- */
 
-const filteredPatients = computed(() => {
-  if (!searchPatient.value) return patients.value
-  const q = searchPatient.value.toLowerCase()
-  return patients.value.filter(p => 
-    p.email.toLowerCase().includes(q) || 
-    (p.first_name && p.first_name.toLowerCase().includes(q)) || 
-    (p.last_name && p.last_name.toLowerCase().includes(q))
-  )
-})
+const loadSurvey = async () => {
+  loadingSurvey.value = true
+  loadError.value = null
+  try {
+    const data = await getSurveyById(surveyId)
+    survey.title = data.title
+    survey.description = data.description || ''
+    
+    // Mapowanie pytań z backendu do formatu frontendu
+    survey.questions = data.questions.map((q: any) => ({
+      text: q.questionText,
+      type: q.questionType,
+      required: q.required,
+      options: q.options?.map((o: any) => o.text) || []
+    }))
+  } catch (e: any) {
+    loadError.value = e.message || 'Nie udało się pobrać ankiety'
+  } finally {
+    loadingSurvey.value = false
+  }
+}
 
 /* ---------- Metody ---------- */
-
-const getPatientLabel = (p: any) => {
-  const name = `${p.first_name || ''} ${p.last_name || ''}`.trim()
-  return name ? `${name} (${p.email})` : p.email
-}
 
 const addQuestion = (type: 'text' | 'rating' | 'choice' | 'number') => {
   survey.questions.push({
@@ -258,35 +230,6 @@ const getTypeName = (type: string) => {
   return map[type] || type
 }
 
-
-/* ---------- Pacjenci ---------- */
-
-const fetchPatients = async () => {
-  loadingPatients.value = true
-  try {
-    const data = await getMyPatients()
-    patients.value = data
-  } catch (e: any) {
-    console.error(e)
-    showSnackbar(e.message || 'Błąd pobierania pacjentów', 'error')
-  } finally {
-    loadingPatients.value = false
-  }
-}
-
-const toggleAllPatients = (val: boolean | null) => {
-  if (val === true) {
-    // Add all filtered patients who aren't already selected
-    const newIds = filteredPatients.value.map(p => p.id)
-    selectedPatients.value = [...new Set([...selectedPatients.value, ...newIds])]
-  } else {
-    // Remove all filtered patients
-    const filteredIds = new Set(filteredPatients.value.map(p => p.id))
-    selectedPatients.value = selectedPatients.value.filter(id => !filteredIds.has(id))
-  }
-}
-
-
 /* ---------- Zapis ---------- */
 
 const submitSurvey = async () => {
@@ -309,19 +252,18 @@ const submitSurvey = async () => {
         : undefined
     }))
 
-    await createSurvey({
+    await updateSurvey(surveyId, {
       title: survey.title,
       description: survey.description,
-      questions: questionsPayload,
-      patientIds: selectedPatients.value // Backend już obsługuje to pole
+      questions: questionsPayload
     })
 
-    showSnackbar('Ankieta utworzona pomyślnie!')
+    showSnackbar('Ankieta zaktualizowana pomyślnie!')
     setTimeout(() => {
-      router.push('/doctor/surveys')
+      router.push(`/doctor/surveys/${surveyId}`)
     }, 1000)
   } catch (e: any) {
-    showSnackbar(e.message || 'Błąd tworzenia ankiety', 'error')
+    showSnackbar(e.message || 'Błąd aktualizacji ankiety', 'error')
   } finally {
     submitting.value = false
   }
@@ -334,6 +276,6 @@ const showSnackbar = (text: string, color = 'success') => {
 }
 
 onMounted(() => {
-  fetchPatients()
+  loadSurvey()
 })
 </script>

@@ -3,6 +3,14 @@ import { API_URL } from "../config";
 
 const SURVEYS_URL = `${API_URL}/surveys`;
 
+/** Struktura pytania przy tworzeniu/edycji ankiety */
+export interface SurveyQuestionInput {
+  question_text: string
+  question_type: 'text' | 'rating' | 'choice' | 'number'
+  required: boolean
+  options?: { option_text: string }[]
+}
+
 /**
  * Pobiera listę wszystkich aktywnych ankiet dostępnych dla pacjenta.
  * (GET /surveys)
@@ -96,7 +104,7 @@ export async function getMyResponse(surveyId: number) {
 export async function createSurvey(data: {
   title: string
   description?: string
-  questions: any[]
+  questions: SurveyQuestionInput[]
   patientIds?: number[]
 }) {
   const res = await fetch(SURVEYS_URL, {
@@ -109,6 +117,29 @@ export async function createSurvey(data: {
     throw new Error(err || 'Nie udało się utworzyć ankiety')
   }
   return res.json()
+}
+
+/**
+ * Aktualizuje istniejącą ankietę (dla terapeuty).
+ * (PATCH /surveys/:id)
+ */
+export async function updateSurvey(id: number, data: {
+  title: string
+  description?: string
+  questions: SurveyQuestionInput[]
+}) {
+  const res = await fetch(`${SURVEYS_URL}/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || 'Nie udało się zaktualizować ankiety')
+  }
+
+  const text = await res.text()
+  return text ? JSON.parse(text) : true
 }
 
 /**

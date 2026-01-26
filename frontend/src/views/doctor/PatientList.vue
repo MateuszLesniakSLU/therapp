@@ -82,7 +82,7 @@ import { requestConnection } from '../../services/connection.service'
 const patients = ref<any[]>([])
 const loading = ref(true)
 const router = useRouter()
-let pollInterval: any = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const showAddDialog = ref(false)
 const connectCode = ref('')

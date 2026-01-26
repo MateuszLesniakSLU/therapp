@@ -11,6 +11,9 @@ export interface User {
     createdAt?: string
 }
 
+/**
+ * Pobiera listę wszystkich użytkowników (GET /users)
+ */
 export async function getAllUsers(): Promise<User[]> {
     const res = await fetch(`${API_URL}/users`, {
         headers: authHeaders(),
@@ -19,6 +22,9 @@ export async function getAllUsers(): Promise<User[]> {
     return res.json()
 }
 
+/**
+ * Aktualizuje dane użytkownika (PATCH /users/:id)
+ */
 export async function updateUser(id: number, data: Partial<User>) {
     const res = await fetch(`${API_URL}/users/${id}`, {
         method: 'PATCH',
@@ -29,6 +35,9 @@ export async function updateUser(id: number, data: Partial<User>) {
     return res.json()
 }
 
+/**
+ * Dezaktywuje użytkownika (DELETE /users/:id)
+ */
 export async function deactivateUser(id: number) {
     const res = await fetch(`${API_URL}/users/${id}`, {
         method: 'DELETE',
@@ -38,6 +47,9 @@ export async function deactivateUser(id: number) {
     return res.json()
 }
 
+/**
+ * Reaktywuje użytkownika (PATCH /users/:id/restore)
+ */
 export async function activateUser(id: number) {
     const res = await fetch(`${API_URL}/users/${id}/restore`, {
         method: 'PATCH',

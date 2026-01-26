@@ -12,7 +12,7 @@
       color="primary"
     />
 
-    <v-form v-if="survey" @submit.prevent="submit">
+    <v-form v-if="survey" @submit.prevent="submit" ref="formRef">
       <div
         v-for="question in orderedQuestions"
         :key="question.id"
@@ -21,13 +21,16 @@
         <v-text-field
           v-if="isTextVisible(question)"
           v-model="answers[question.id]"
-          :label="question.questionText"
-          :required="question.required"
+          :label="question.questionText + (question.required ? ' *' : '')"
+          :rules="question.required && isTextVisible(question) ? [requiredRule] : []"
         />
 
         <div v-else-if="question.questionType === 'rating'">
           <div class="d-flex justify-space-between mb-1">
-            <span>{{ question.questionText }}</span>
+            <span>
+              {{ question.questionText }}
+              <span v-if="question.required" class="text-error">*</span>
+            </span>
             <strong>{{ answers[question.id] ?? '-' }}</strong>
           </div>
 
@@ -37,13 +40,18 @@
             :max="10"
             step="1"
             show-ticks="always"
+            :color="answers[question.id] ? 'primary' : 'grey'"
           />
+          <div v-if="question.required && !answers[question.id]" class="text-error text-caption">
+            To pole jest wymagane
+          </div>
         </div>
 
         <v-radio-group
           v-else-if="question.questionType === 'choice'"
           v-model="answers[question.id]"
-          :label="question.questionText"
+          :label="question.questionText + (question.required ? ' *' : '')"
+          :rules="question.required ? [requiredRule] : []"
         >
           <v-radio
             v-for="option in question.options"
@@ -54,11 +62,16 @@
         </v-radio-group>
       </div>
 
+      <v-alert v-if="!isFormValid" type="warning" variant="tonal" class="mb-4" density="compact">
+        Wypełnij wszystkie wymagane pola oznaczone gwiazdką (*)
+      </v-alert>
+
       <v-btn
         color="primary"
         variant="flat"
         type="submit"
         :loading="submitting"
+        :disabled="!isFormValid"
       >
         Zapisz ankietę
       </v-btn>
@@ -133,6 +146,38 @@ const tookMeds = computed(() =>
   medsQuestion.value ? answers.value[medsQuestion.value.id] : null,
 )
 
+/** Reguła walidacji dla wymaganych pól */
+const requiredRule = (value: string | number | undefined) => {
+  if (value === undefined || value === null || value === '') {
+    return 'To pole jest wymagane'
+  }
+  return true
+}
+
+/** Sprawdza czy formularz jest poprawnie wypełniony */
+const isFormValid = computed(() => {
+  if (!survey.value) return false
+  
+  for (const question of orderedQuestions.value) {
+    if (!question.required) continue
+    
+    if (question.questionType === 'text') {
+      if (ifYesQuestion.value && question.id === ifYesQuestion.value.id && tookMeds.value !== 'Tak') {
+        continue
+      }
+      if (ifNoQuestion.value && question.id === ifNoQuestion.value.id && tookMeds.value !== 'Nie') {
+        continue
+      }
+    }
+    
+    const answer = answers.value[question.id]
+    if (answer === undefined || answer === null || answer === '') {
+      return false
+    }
+  }
+  
+  return true
+})
 
 const isTextVisible = (question: SurveyQuestion) => {
   if (question.questionType !== 'text') return false
@@ -204,24 +249,6 @@ const submit = async () => {
             ? Number(answers.value[q.id])
             : undefined,
       })),
-
-      took_medication:
-        medsQuestion.value
-          ? answers.value[medsQuestion.value.id] === 'Tak'
-          : undefined,
-
-      wellbeing_rating:
-        orderedQuestions.value.find(
-          (q: SurveyQuestion) => q.questionType === 'rating',
-        )
-          ? Number(
-              answers.value[
-                orderedQuestions.value.find(
-                  (q: SurveyQuestion) => q.questionType === 'rating',
-                )!.id
-              ],
-            )
-          : undefined,
     })
 
     showSuccess.value = true

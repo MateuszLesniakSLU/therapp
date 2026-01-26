@@ -113,7 +113,7 @@ const expires = ref('')
 const loadingCode = ref(false)
 const loadingList = ref(false)
 const connections = ref<Connection[]>([])
-let pollInterval: any = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const generateNewCode = async () => {
   loadingCode.value = true

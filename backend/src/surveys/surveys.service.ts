@@ -68,7 +68,6 @@ export class SurveysService {
         }
       }
 
-      // Przypisz ankietę do pacjentów jeśli podano
       if (dto.patientIds && dto.patientIds.length > 0) {
         await tx.surveyAssignment.createMany({
           data: dto.patientIds.map(userId => ({
@@ -83,9 +82,33 @@ export class SurveysService {
   }
 
   /**
-   * Pobiera listę tylko aktywnych ankiet.
+   * Pobiera listę aktywnych ankiet.
+   * Dla pacjenta zwraca tylko ankiety przypisane do niego przez SurveyAssignment.
+   * Dla terapeuty/admina zwraca wszystkie aktywne ankiety.
    */
-  async listSurveys(): Promise<any[]> {
+  async listSurveys(userId?: number, role?: string): Promise<any[]> {
+    if (role?.toLowerCase() === 'patient' && userId) {
+      const assignments = await this.prisma.surveyAssignment.findMany({
+        where: { userId },
+        select: { surveyId: true }
+      });
+
+      const surveyIds = assignments.map(a => a.surveyId);
+
+      return this.prisma.survey.findMany({
+        where: {
+          id: { in: surveyIds },
+          active: true,
+        },
+        include: {
+          questions: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+    }
+
     return this.prisma.survey.findMany({
       where: {
         active: true,
@@ -214,6 +237,16 @@ export class SurveysService {
       });
 
       if (!dto.questions) return;
+
+      const questionsToDelete = await tx.surveyQuestion.findMany({
+        where: { surveyId: id },
+        select: { id: true }
+      });
+      const questionIds = questionsToDelete.map(q => q.id);
+
+      await tx.surveyAnswer.deleteMany({
+        where: { questionId: { in: questionIds } }
+      });
 
       await tx.surveyQuestionOption.deleteMany({
         where: { question: { surveyId: id } },
@@ -494,6 +527,15 @@ export class SurveysService {
       effectivePeriod = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
     }
 
+    const assignedSurveysCount = await this.prisma.surveyAssignment.count({
+      where: {
+        userId: patientId,
+        survey: {
+          active: true
+        }
+      }
+    });
+
     const responses = await this.prisma.surveyResponse.findMany({
       where: {
         userId: patientId,
@@ -536,6 +578,7 @@ export class SurveysService {
     return {
       patientId,
       period: effectivePeriod,
+      assignedSurveysCount,
       total,
       avgWellbeing,
       responses: responses.map(r => ({
@@ -639,7 +682,6 @@ export class SurveysService {
    */
   async updateSurveyAssignments(surveyId: number, patientIds: number[]) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Znajdź usuwanych użytkowników
       const assignmentsToDelete = await tx.surveyAssignment.findMany({
         where: {
           surveyId,
@@ -651,7 +693,6 @@ export class SurveysService {
       const userIdsToDelete = assignmentsToDelete.map(a => a.userId);
 
       if (userIdsToDelete.length > 0) {
-        // Usuń dzisiejsze odpowiedzi usuwanych użytkowników (żeby nie psuły statystyk)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -663,7 +704,6 @@ export class SurveysService {
           }
         });
 
-        // Usuń przypisania
         await tx.surveyAssignment.deleteMany({
           where: {
             surveyId,
@@ -672,7 +712,6 @@ export class SurveysService {
         });
       }
 
-      // 2. Znajdź istniejące przypisania spośród nowej listy (żeby nie dodawać duplikatów)
       const existing = await tx.surveyAssignment.findMany({
         where: {
           surveyId,
@@ -684,7 +723,6 @@ export class SurveysService {
       const existingIds = new Set(existing.map(e => e.userId));
       const toCreate = patientIds.filter(id => !existingIds.has(id));
 
-      // 3. Dodaj brakujące
       if (toCreate.length > 0) {
         await tx.surveyAssignment.createMany({
           data: toCreate.map(userId => ({
@@ -731,7 +769,6 @@ export class SurveysService {
 
     if (!survey) throw new NotFoundException('Ankieta nie znaleziona');
 
-    // Sprawdź kto wypełnił dzisiaj
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 

@@ -60,6 +60,7 @@ export const router = createRouter({
         { path: 'patients/:patientId/survey/:surveyId', component: () => import('../views/doctor/PatientSurveyResponse.vue') },
         { path: 'surveys', component: () => import('../views/doctor/DoctorSurveys.vue') },
         { path: 'surveys/new', component: () => import('../views/doctor/DoctorSurveyCreate.vue') },
+        { path: 'surveys/:id/edit', component: () => import('../views/doctor/DoctorSurveyEdit.vue') },
         { path: 'surveys/:id', component: () => import('../views/doctor/DoctorSurveyDetails.vue') },
         { path: 'settings', component: () => import('../views/doctor/DoctorSettings.vue') },
       ],

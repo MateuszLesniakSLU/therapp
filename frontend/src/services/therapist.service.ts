@@ -7,6 +7,7 @@ import { API_URL } from '../config'
 export interface PatientStats {
     patientId: number
     period: number
+    assignedSurveysCount: number
     total: number
     avgWellbeing: number
     missingDates: string[]

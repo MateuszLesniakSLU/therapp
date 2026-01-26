@@ -2,14 +2,21 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as cron from 'node-cron';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Serwis harmonogramu ankiet.
+ * Automatycznie tworzy codzienną ankietę "Daily Wellbeing" o północy.
+ */
 @Injectable()
 export class SurveySchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SurveySchedulerService.name);
 
   constructor(private readonly prisma: PrismaService) { }
 
+  /**
+   * Inicjalizacja harmonogramu przy starcie modułu.
+   * Ustawia zadanie cron na 00:00 każdego dnia.
+   */
   onModuleInit() {
-    //Utwórz ankietę o 00:00
     cron.schedule(
       '0 0 * * *',
       () => {
@@ -24,6 +31,10 @@ export class SurveySchedulerService implements OnModuleInit {
     this.logger.log('SurveySchedulerService ustawiony na (codziennie o 00:00)');
   }
 
+  /**
+   * Wykonuje codzienny cykl tworzenia ankiety.
+   * Dezaktywuje poprzednie ankiety i tworzy nową dla wszystkich aktywnych pacjentów.
+   */
   async runDailySurveyCycle() {
     const now = new Date();
     const surveyDate = new Date(

@@ -67,6 +67,8 @@ model SurveyQuestion {
   survey  Survey @relation(fields: [surveyId], references: [id])
   options SurveyQuestionOption[]
   answers SurveyAnswer[]
+
+  @@index([surveyId])
 }
 
 model SurveyQuestionOption {
@@ -90,6 +92,7 @@ model SurveyAssignment {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([surveyId, userId])
+  @@index([userId])
 }
 
 model SurveyResponse {
@@ -105,6 +108,8 @@ model SurveyResponse {
   answers SurveyAnswer[]
 
   @@unique([surveyId, userId])
+  @@index([userId])
+  @@index([surveyId])
 }
 
 model SurveyAnswer {
@@ -114,10 +119,11 @@ model SurveyAnswer {
   answerText  String?
   answerValue Int?
 
-  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  response SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   question SurveyQuestion @relation(fields: [questionId], references: [id])
 
   @@unique([responseId, questionId])
+  @@index([questionId])
 }
 
 model PatientTherapist {
@@ -144,4 +150,7 @@ model ActivityLog {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
 }

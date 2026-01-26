@@ -47,12 +47,14 @@ export class SurveysController {
 
   /**
    * GET /surveys
-   * Pobiera listę aktywnych ankiet.
+   * Pobiera listę aktywnych ankiet (dla pacjenta tylko przypisane).
    */
   @Roles(Role.PATIENT, Role.ADMIN, Role.THERAPIST)
   @Get()
-  async listSurveys() {
-    return this.surveysService.listSurveys()
+  async listSurveys(@Request() req: any) {
+    const userId = req.user.sub || req.user.userId;
+    const role = req.user.role;
+    return this.surveysService.listSurveys(userId, role);
   }
 
   /**
