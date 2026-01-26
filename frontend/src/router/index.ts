@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import { isTokenExpired, clearAuth } from '../services/api'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -86,6 +87,13 @@ router.beforeEach((to) => {
   if (to.meta.public) return
 
   if (!token && !to.meta.guestOnly) return '/login'
+
+  if (token && !to.meta.guestOnly) {
+    if (isTokenExpired(token)) {
+      clearAuth()
+      return '/'
+    }
+  }
 
   if (token && to.meta.guestOnly) {
     if (role === 'patient') return '/patient'

@@ -1,4 +1,4 @@
-import { authHeaders } from './api'
+import { authFetch } from './api'
 import { API_URL } from '../config'
 
 export interface Connection {
@@ -26,9 +26,8 @@ export interface Connection {
  * (POST /connections/generate-code)
  */
 export async function generateCode() {
-    const res = await fetch(`${API_URL}/connections/generate-code`, {
+    const res = await authFetch(`${API_URL}/connections/generate-code`, {
         method: 'POST',
-        headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Nie udało się wygenerować kodu')
     return res.json()
@@ -39,12 +38,8 @@ export async function generateCode() {
  * (POST /connections/request)
  */
 export async function requestConnection(code: string) {
-    const res = await fetch(`${API_URL}/connections/request`, {
+    const res = await authFetch(`${API_URL}/connections/request`, {
         method: 'POST',
-        headers: {
-            ...authHeaders(),
-            'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ code }),
     })
     if (!res.ok) {
@@ -59,9 +54,7 @@ export async function requestConnection(code: string) {
  * (GET /connections)
  */
 export async function getMyConnections() {
-    const res = await fetch(`${API_URL}/connections`, {
-        headers: authHeaders(),
-    })
+    const res = await authFetch(`${API_URL}/connections`)
     if (!res.ok) throw new Error('Nie udało się pobrać połączeń')
     return res.json()
 }
@@ -71,9 +64,8 @@ export async function getMyConnections() {
  * (PATCH /connections/:id/accept)
  */
 export async function acceptConnection(id: number) {
-    const res = await fetch(`${API_URL}/connections/${id}/accept`, {
+    const res = await authFetch(`${API_URL}/connections/${id}/accept`, {
         method: 'PATCH',
-        headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Nie udało się zaakceptować')
     return res.json()
@@ -84,9 +76,8 @@ export async function acceptConnection(id: number) {
  * (DELETE /connections/:id)
  */
 export async function deleteConnection(id: number) {
-    const res = await fetch(`${API_URL}/connections/${id}`, {
+    const res = await authFetch(`${API_URL}/connections/${id}`, {
         method: 'DELETE',
-        headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Nie udało się usunąć połączenia')
     return res.json()

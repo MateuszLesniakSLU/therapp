@@ -1,4 +1,4 @@
-import { authHeaders } from "./api";
+import { authFetch } from "./api";
 import { API_URL } from "../config";
 
 const SURVEYS_URL = `${API_URL}/surveys`;
@@ -16,9 +16,7 @@ export interface SurveyQuestionInput {
  * (GET /surveys)
  */
 export async function getSurveys() {
-  const response = await fetch(SURVEYS_URL, {
-    headers: authHeaders(),
-  });
+  const response = await authFetch(SURVEYS_URL);
   if (!response.ok) throw new Error('Nie udało się pobrać ankiet.');
   return response.json();
 }
@@ -28,9 +26,7 @@ export async function getSurveys() {
  * (GET /surveys/:id)
  */
 export async function getSurveyById(id: number) {
-  const response = await fetch(`${SURVEYS_URL}/${id}`, {
-    headers: authHeaders(),
-  });
+  const response = await authFetch(`${SURVEYS_URL}/${id}`);
   if (!response.ok) throw new Error('Nie udało się pobrać ankiety.');
   return response.json();
 }
@@ -42,10 +38,7 @@ export async function getSurveyById(id: number) {
 export async function getMySurveyStatus(): Promise<
   { surveyId: number; updatedAt: string }[]
 > {
-  const res = await fetch(
-    `${SURVEYS_URL}/my/status`,
-    { headers: authHeaders() },
-  )
+  const res = await authFetch(`${SURVEYS_URL}/my/status`)
   return res.json()
 }
 
@@ -63,19 +56,15 @@ export async function submitTodayResponse(data: {
   took_medication?: boolean
   wellbeing_rating?: number
 }) {
-  const res = await fetch(
-    `${SURVEYS_URL}/today/response`,
-    {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        survey_id: data.surveyId,
-        answers: data.answers,
-        took_medication: data.took_medication,
-        wellbeing_rating: data.wellbeing_rating,
-      }),
-    },
-  )
+  const res = await authFetch(`${SURVEYS_URL}/today/response`, {
+    method: 'POST',
+    body: JSON.stringify({
+      survey_id: data.surveyId,
+      answers: data.answers,
+      took_medication: data.took_medication,
+      wellbeing_rating: data.wellbeing_rating,
+    }),
+  })
 
   if (!res.ok) {
     const err = await res.text()
@@ -88,10 +77,7 @@ export async function submitTodayResponse(data: {
  * (GET /surveys/my/response/:id)
  */
 export async function getMyResponse(surveyId: number) {
-  const res = await fetch(
-    `${SURVEYS_URL}/my/response/${surveyId}`,
-    { headers: authHeaders() },
-  )
+  const res = await authFetch(`${SURVEYS_URL}/my/response/${surveyId}`)
   if (!res.ok) return null
   const text = await res.text()
   return text ? JSON.parse(text) : null
@@ -107,9 +93,8 @@ export async function createSurvey(data: {
   questions: SurveyQuestionInput[]
   patientIds?: number[]
 }) {
-  const res = await fetch(SURVEYS_URL, {
+  const res = await authFetch(SURVEYS_URL, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -128,9 +113,8 @@ export async function updateSurvey(id: number, data: {
   description?: string
   questions: SurveyQuestionInput[]
 }) {
-  const res = await fetch(`${SURVEYS_URL}/${id}`, {
+  const res = await authFetch(`${SURVEYS_URL}/${id}`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -147,9 +131,7 @@ export async function updateSurvey(id: number, data: {
  * (GET /surveys/:id/details)
  */
 export async function getSurveyDetails(id: number) {
-  const res = await fetch(`${SURVEYS_URL}/${id}/details`, {
-    headers: authHeaders(),
-  })
+  const res = await authFetch(`${SURVEYS_URL}/${id}/details`)
   if (!res.ok) throw new Error('Nie udało się pobrać szczegółów ankiety')
   return res.json()
 }
@@ -158,9 +140,8 @@ export async function getSurveyDetails(id: number) {
  * Aktualizuje przypisania ankiety (PUT /surveys/:id/assignments)
  */
 export async function updateSurveyAssignments(surveyId: number, patientIds: number[]) {
-  const res = await fetch(`${SURVEYS_URL}/${surveyId}/assignments`, {
+  const res = await authFetch(`${SURVEYS_URL}/${surveyId}/assignments`, {
     method: 'PUT',
-    headers: authHeaders(),
     body: JSON.stringify({ patientIds }),
   })
   if (!res.ok) throw new Error('Nie udało się zaktualizować przypisań')
@@ -171,9 +152,8 @@ export async function updateSurveyAssignments(surveyId: number, patientIds: numb
  * Usuwa ankietę (DELETE /surveys/:id)
  */
 export async function deleteSurvey(id: number) {
-  const res = await fetch(`${SURVEYS_URL}/${id}`, {
+  const res = await authFetch(`${SURVEYS_URL}/${id}`, {
     method: 'DELETE',
-    headers: authHeaders(),
   })
   if (!res.ok) throw new Error('Nie udało się usunąć ankiety')
   return res.json()
@@ -184,9 +164,7 @@ export async function deleteSurvey(id: number) {
  * (GET /surveys/all)
  */
 export async function getAllSurveys() {
-  const res = await fetch(`${SURVEYS_URL}/all`, {
-    headers: authHeaders(),
-  })
+  const res = await authFetch(`${SURVEYS_URL}/all`)
   if (!res.ok) throw new Error('Nie udało się pobrać ankiet')
   return res.json()
 }
@@ -195,12 +173,8 @@ export async function getAllSurveys() {
  * Ustawia status ankiety (PATCH /surveys/:id/status)
  */
 export async function setSurveyStatus(id: number, active: boolean) {
-  const res = await fetch(`${SURVEYS_URL}/${id}/status`, {
+  const res = await authFetch(`${SURVEYS_URL}/${id}/status`, {
     method: 'PATCH',
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'application/json'
-    },
     body: JSON.stringify({ active }),
   })
   if (!res.ok) throw new Error('Nie udało się zmienić statusu ankiety')
